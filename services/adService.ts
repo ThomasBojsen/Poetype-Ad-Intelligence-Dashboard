@@ -22,7 +22,7 @@ const MOCK_DATA: AdData[] = [
   },
 ];
 
-export const fetchAdData = async (useRealUrl: boolean = true): Promise<AdData[]> => {
+export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string): Promise<AdData[]> => {
   // Append timestamp to URL to prevent caching when reloading after scrape
   const urlWithCacheBust = `${DATA_URL}&t=${new Date().getTime()}`;
 
@@ -41,7 +41,7 @@ export const fetchAdData = async (useRealUrl: boolean = true): Promise<AdData[]>
     if (!response.ok) throw new Error(`Failed to fetch CSV: ${response.statusText}`);
     
     const text = await response.text();
-    return parseCSV(text);
+    return parseCSV(text, sessionId);
   } catch (error) {
     console.error("Error fetching data, falling back to mock", error);
     // Fallback to empty array or mock data depending on preference, keeping empty to show state
@@ -49,15 +49,15 @@ export const fetchAdData = async (useRealUrl: boolean = true): Promise<AdData[]>
   }
 };
 
-export const triggerScrapeWorkflow = async (urls: string[]): Promise<boolean> => {
+export const triggerScrapeWorkflow = async (urls: string[], sessionId: string): Promise<boolean> => {
   if (!MAKE_WEBHOOK_URL || MAKE_WEBHOOK_URL.includes("INSERT_YOUR")) {
     console.error("Make Webhook URL not configured");
     return true; 
   }
 
   try {
-    // Construct the specific payload structure required by Apify
     const payload = {
+      "sessionId": sessionId, // <--- NYT FELT: Make skal bruge dette!
       "count": 300,
       "period": "last30d",
       "scrapeAdDetails": true,
@@ -112,7 +112,8 @@ const cleanVideoUrl = (rawUrl: string | undefined): string => {
 };
 
 // Advanced CSV Parser that handles newlines inside quotes
-const parseCSV = (text: string): AdData[] => {
+// Advanced CSV Parser that handles newlines inside quotes
+const parseCSV = (text: string, sessionId?: string): AdData[] => {
   const rows: string[][] = [];
   let currentRow: string[] = [];
   let currentVal = '';
@@ -155,11 +156,11 @@ const parseCSV = (text: string): AdData[] => {
   // Skip header (row 0)
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    // Basic validation to ensure row has enough columns based on your screenshot
+    // Basic validation to ensure row has enough columns
     if (row.length < 6) continue;
 
     /**
-     * MAPPING BASED ON SCREENSHOT:
+     * MAPPING:
      * Col 0: ad_id
      * Col 1: Page Name
      * Col 2: Video URL
@@ -169,14 +170,25 @@ const parseCSV = (text: string): AdData[] => {
      * Col 6: Heading
      * Col 7: Ad copy
      * Col 8: Ad Library URL
+     * Col 9: Session ID (Make sørger for at mappe dette)
      */
     
+    const rowSessionId = row[9]?.trim();
+
+    // --- FILTRERING START ---
+    // Hvis appen kører med et sessionId, og rækken i CSV'en ikke matcher det ID, så skip rækken.
+    // Dette sikrer, at brugeren kun ser sine egne data.
+    if (sessionId && rowSessionId !== sessionId) {
+        continue;
+    }
+    // --- FILTRERING SLUT ---
+
     const rawReach = row[5]?.replace(/[^0-9]/g, '') || '0';
 
     data.push({
       id: row[0] || `row-${i}`,
       page_name: row[1]?.trim() || "Unknown Brand",
-      video_url: cleanVideoUrl(row[2]),
+      video_url: cleanVideoUrl(row[2]), // Husk at cleanVideoUrl funktionen skal være tilgængelig i filen
       thumbnail: row[3]?.trim() || "", 
       reach: parseInt(rawReach),
       heading: row[6]?.trim() || "",

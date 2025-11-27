@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
@@ -22,6 +22,9 @@ const App: React.FC = () => {
     maxReach: 1000000, // Default max
   });
 
+  // 1. GENERER UNIKT SESSION ID (Lever så længe fanen er åben)
+  const sessionId = useRef(Math.random().toString(36).substring(2, 15));
+
   // Initial Data Fetch
   useEffect(() => {
     loadData();
@@ -29,8 +32,8 @@ const App: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
-    // Pass true to ensure we use the real CSV URL
-    const data = await fetchAdData(true); 
+    // 2. Pass true to ensure we use the real CSV URL AND pass sessionId
+    const data = await fetchAdData(true, sessionId.current); 
     setRawData(data);
     
     // Set dynamic max reach based on data
@@ -45,7 +48,8 @@ const App: React.FC = () => {
   const handleStartScrape = async (urls: string[]) => {
     setIsScrapeModalOpen(false);
     
-    const success = await triggerScrapeWorkflow(urls);
+    // 3. Send sessionId med til trigger
+    const success = await triggerScrapeWorkflow(urls, sessionId.current);
     if (success) {
       setIsScraping(true);
       setScrapeTimeLeft(SCRAPE_WAIT_TIME_SECONDS);
