@@ -197,6 +197,6 @@ const parseCSV = (text: string, sessionId?: string): AdData[] => {
     });
   }
 
-  // Sort by reach (descending) and take top 20
-  return data.sort((a, b) => b.reach - a.reach).slice(0, 20);
+  // Sort by reach (descending) so highest performers surface first
+  return data.sort((a, b) => b.reach - a.reach);
 };

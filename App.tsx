@@ -79,22 +79,72 @@ const App: React.FC = () => {
     }
   };
 
-  // Countdown Timer Effect
+  // Continuous countdown + polling while scraping
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    
-    if (isScraping && scrapeTimeLeft > 0) {
-      timer = setInterval(() => {
-        setScrapeTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (isScraping && scrapeTimeLeft === 0) {
-      // Time is up! Refresh data
-      setIsScraping(false);
-      loadData(); // Reloads CSV
-    }
+    if (!isScraping || !sessionId) return;
 
-    return () => clearInterval(timer);
-  }, [isScraping, scrapeTimeLeft, loadData]);
+    let countdownTimer: ReturnType<typeof setInterval> | undefined;
+    let pollTimer: ReturnType<typeof setInterval> | undefined;
+    let cancelled = false;
+    let hasSwitchedToFastPolling = false;
+
+    const applyFetchedData = (data: AdData[]) => {
+      setRawData(data);
+      if (data.length > 0) {
+        const maxR = Math.max(...data.map(d => d.reach), 0);
+        setFilters(prev => ({ ...prev, maxReach: maxR }));
+      }
+      setLoading(false);
+    };
+
+    const checkData = async () => {
+      if (cancelled) return;
+      try {
+        const data = await fetchAdData(true, sessionId);
+        if (data.length > 0) {
+          applyFetchedData(data);
+          console.log("Data fetched early!");
+          setIsScraping(false);
+        }
+      } catch (error) {
+        console.error("Polling failed", error);
+      }
+    };
+
+    const startPolling = (intervalMs: number) => {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(checkData, intervalMs);
+    };
+
+    // Initial poll cadence: every 30 seconds
+    startPolling(30000);
+    checkData(); // Fire an immediate check once scraping starts
+
+    countdownTimer = setInterval(() => {
+      setScrapeTimeLeft(prev => {
+        const next = prev - 1;
+
+        if (!hasSwitchedToFastPolling && next <= 0) {
+          hasSwitchedToFastPolling = true;
+          startPolling(15000); // Faster polling once we hit overtime
+        }
+
+        if (next <= -180) {
+          alert("Data is delayed by Google. Please refresh the page in a few minutes.");
+          setIsScraping(false);
+          return -180;
+        }
+
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      if (countdownTimer) clearInterval(countdownTimer);
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [isScraping, sessionId]);
 
 
   // Derived State: Unique Brands
