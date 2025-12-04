@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
@@ -7,9 +7,16 @@ import { AdData, FilterState } from './types';
 import { fetchAdData, triggerScrapeWorkflow, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
 import { LayoutGrid, Target, Zap, PlusCircle } from 'lucide-react';
 
+const SESSION_STORAGE_KEY = 'poetype_session_id';
+
+const generateSessionId = (): string => {
+  return `${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+};
+
 const App: React.FC = () => {
   const [rawData, setRawData] = useState<AdData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   
   // Scrape Logic States
   const [isScrapeModalOpen, setIsScrapeModalOpen] = useState(false);
@@ -22,18 +29,25 @@ const App: React.FC = () => {
     maxReach: 1000000, // Default max
   });
 
-  // 1. GENERER UNIKT SESSION ID (Lever så længe fanen er åben)
-  const sessionId = useRef(Math.random().toString(36).substring(2, 15));
-
-  // Initial Data Fetch
   useEffect(() => {
-    loadData();
+    try {
+      const storedId = window.localStorage.getItem(SESSION_STORAGE_KEY);
+      if (storedId) {
+        setSessionId(storedId);
+        return;
+      }
+      const newSessionId = generateSessionId();
+      window.localStorage.setItem(SESSION_STORAGE_KEY, newSessionId);
+      setSessionId(newSessionId);
+    } catch (error) {
+      console.error('Failed to initialize session ID', error);
+    }
   }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (!sessionId) return;
     setLoading(true);
-    // 2. Pass true to ensure we use the real CSV URL AND pass sessionId
-    const data = await fetchAdData(true, sessionId.current); 
+    const data = await fetchAdData(true, sessionId); 
     setRawData(data);
     
     // Set dynamic max reach based on data
@@ -41,15 +55,22 @@ const App: React.FC = () => {
       const maxR = Math.max(...data.map(d => d.reach), 0);
       setFilters(prev => ({ ...prev, maxReach: maxR }));
     }
-    
     setLoading(false);
-  };
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    loadData();
+  }, [sessionId, loadData]);
 
   const handleStartScrape = async (urls: string[]) => {
+    if (!sessionId) {
+      alert("Session is not ready yet. Please retry in a moment.");
+      return;
+    }
     setIsScrapeModalOpen(false);
     
-    // 3. Send sessionId med til trigger
-    const success = await triggerScrapeWorkflow(urls, sessionId.current);
+    const success = await triggerScrapeWorkflow(urls, sessionId);
     if (success) {
       setIsScraping(true);
       setScrapeTimeLeft(SCRAPE_WAIT_TIME_SECONDS);
@@ -60,7 +81,7 @@ const App: React.FC = () => {
 
   // Countdown Timer Effect
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setInterval>;
     
     if (isScraping && scrapeTimeLeft > 0) {
       timer = setInterval(() => {
@@ -73,7 +94,7 @@ const App: React.FC = () => {
     }
 
     return () => clearInterval(timer);
-  }, [isScraping, scrapeTimeLeft]);
+  }, [isScraping, scrapeTimeLeft, loadData]);
 
 
   // Derived State: Unique Brands

@@ -178,9 +178,9 @@ const parseCSV = (text: string, sessionId?: string): AdData[] => {
     // --- FILTRERING START ---
     // Hvis appen kører med et sessionId, og rækken i CSV'en ikke matcher det ID, så skip rækken.
     // Dette sikrer, at brugeren kun ser sine egne data.
-    if (sessionId && !rowSessionId.includes(sessionId)) {
+    if (sessionId && (!rowSessionId || !rowSessionId.includes(sessionId))) {
       continue;
-  }
+    }
     // --- FILTRERING SLUT ---
 
     const rawReach = row[5]?.replace(/[^0-9]/g, '') || '0';
