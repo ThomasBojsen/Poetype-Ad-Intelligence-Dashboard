@@ -51,10 +51,10 @@ export default async function handler(
     let updatedCount = 0;
 
     for (const brand of brands) {
-      // Check if brand name is generic (starts with "Brand" followed by numbers or spaces)
+      // Check if brand name is generic
       const isGenericName = brand.name === 'Brand' || 
                             brand.name.startsWith('Brand ') || 
-                            brand.name.match(/^Brand\s*\d+$/);
+                            brand.name.match(/^Brand \d+$/);
       
       if (isGenericName) {
         // Query existing ads for this brand URL to get the page_name
@@ -64,7 +64,7 @@ export default async function handler(
           .eq('ad_library_url', brand.ad_library_url)
           .not('page_name', 'is', null)
           .neq('page_name', 'Unknown')
-          .limit(50); // Get more ads to find the most common page_name
+          .limit(10);
         
         if (adsError) {
           console.error(`Error fetching ads for brand ${brand.id}:`, adsError);
@@ -72,35 +72,18 @@ export default async function handler(
         }
         
         if (existingAds && existingAds.length > 0) {
-          // Find the most common page_name
-          const pageNameCounts = new Map<string, number>();
-          existingAds.forEach(ad => {
-            const pageName = ad.page_name;
-            if (pageName && pageName !== 'Unknown' && !pageName.match(/^\d+$/)) {
-              pageNameCounts.set(pageName, (pageNameCounts.get(pageName) || 0) + 1);
-            }
-          });
-          
-          // Get the most common page_name
-          let mostCommonPageName = '';
-          let maxCount = 0;
-          pageNameCounts.forEach((count, name) => {
-            if (count > maxCount) {
-              maxCount = count;
-              mostCommonPageName = name;
-            }
-          });
-          
-          if (mostCommonPageName && 
-              mostCommonPageName !== 'Unknown' &&
-              !mostCommonPageName.match(/^\d+$/) &&
-              mostCommonPageName.length > 0 &&
-              mostCommonPageName !== brand.name) {
-            console.log(`Updating brand ${brand.id} name from "${brand.name}" to "${mostCommonPageName}" (found ${maxCount} times in ${existingAds.length} ads)`);
+          // Get the most common page_name (or just use the first one)
+          const pageName = existingAds[0].page_name;
+          if (pageName && 
+              pageName !== 'Unknown' &&
+              !pageName.match(/^\d+$/) &&
+              pageName.length > 0 &&
+              pageName !== brand.name) {
+            console.log(`Updating brand ${brand.id} name from "${brand.name}" to "${pageName}"`);
             updatePromises.push(
               supabase
                 .from('brands')
-                .update({ name: mostCommonPageName })
+                .update({ name: pageName })
                 .eq('id', brand.id)
             );
             updatedCount++;
