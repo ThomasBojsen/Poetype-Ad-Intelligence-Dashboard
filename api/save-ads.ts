@@ -75,33 +75,39 @@ export default async function handler(
   }
 
   try {
-    // Apify webhook sends event data in different formats
-    // Check for resource object (Apify's standard format) or custom payload template
+    // Apify webhook sends event data in standard format
+    // Structure: { resource: { id, defaultDatasetId, ... }, eventType, ... }
     const resource = req.body.resource || req.body.data?.resource;
-    const eventData = req.body.data || req.body;
-    
-    // Try to get runId from multiple possible locations
-    const runId = resource?.id || eventData.runId || req.body.runId || eventData.id || resource?.runId;
-    const sessionId = eventData.sessionId || req.body.sessionId;
-    
-    // Try to get dataset ID from multiple possible locations
-    const datasetId = resource?.defaultDatasetId || eventData.defaultDatasetId || req.body.defaultDatasetId;
+    const runId = resource?.id;
+    const datasetId = resource?.defaultDatasetId;
 
     console.log('Webhook payload:', JSON.stringify(req.body, null, 2));
+    console.log('Resource object:', JSON.stringify(resource, null, 2));
     console.log('Extracted runId:', runId);
     console.log('Extracted datasetId:', datasetId);
-    console.log('Resource object:', JSON.stringify(resource, null, 2));
 
-    if (!runId || runId.includes('{{')) {
+    if (!runId) {
       return res.status(400).json({ 
-        error: 'Missing or invalid runId in webhook payload',
-        received: runId,
+        error: 'Missing runId in webhook payload',
         body: req.body 
       });
     }
 
+    // Fetch the run to get sessionId from tags
+    let sessionId: string | undefined;
+    try {
+      const run = await apifyClient.run(runId).get();
+      // Extract sessionId from tags (format: "sessionId:xxx")
+      const sessionTag = run.tags?.find((tag: string) => tag.startsWith('sessionId:'));
+      if (sessionTag) {
+        sessionId = sessionTag.split(':')[1];
+      }
+    } catch (error) {
+      console.warn('Could not fetch run to get sessionId:', error);
+    }
+
     // If we have datasetId directly, use it
-    if (datasetId && !datasetId.includes('{{')) {
+    if (datasetId) {
       return await processDataset(datasetId, sessionId, res);
     }
 

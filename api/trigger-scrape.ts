@@ -85,15 +85,21 @@ export default async function handler(
     const webhookUrl = getWebhookUrl();
     
     // Step 5: Start Apify Actor run
+    // Store sessionId in run options so we can retrieve it from the webhook
     const run = await apifyClient.actor('curious_coder/facebook-ads-library-scraper').start(apifyInput, {
       waitForFinish: 0, // Don't wait, let it run async (0 = no wait)
       webhooks: [
         {
           eventTypes: ['ACTOR.RUN.SUCCEEDED'],
           requestUrl: webhookUrl,
-          payloadTemplate: `{"runId":"{{resource.id}}","defaultDatasetId":"{{resource.defaultDatasetId}}","sessionId":"${sessionId}"}`,
+          // Don't use custom payload template - Apify sends resource data by default
+          // We'll get sessionId from the run's options or tags
         },
       ],
+      // Store sessionId in run options for later retrieval
+      options: {
+        tags: [`sessionId:${sessionId}`],
+      },
     });
 
     return res.status(200).json({
