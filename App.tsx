@@ -25,6 +25,8 @@ const App: React.FC = () => {
   const [isScrapeModalOpen, setIsScrapeModalOpen] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeTimeLeft, setScrapeTimeLeft] = useState(0);
+  const [scrapeStartTime, setScrapeStartTime] = useState<Date | null>(null);
+  const [dataCountAtScrapeStart, setDataCountAtScrapeStart] = useState<number>(0);
 
   const [filters, setFilters] = useState<FilterState>({
     selectedBrands: [],
@@ -89,6 +91,10 @@ const App: React.FC = () => {
     }
     setIsScrapeModalOpen(false);
     
+    // Store current data count and start time before scraping
+    setDataCountAtScrapeStart(rawData.length);
+    setScrapeStartTime(new Date());
+    
     const success = await triggerScrapeWorkflow(urls, sessionId);
     if (success) {
       // Refresh brands list after adding new brands
@@ -127,10 +133,20 @@ const App: React.FC = () => {
       try {
         const result = await fetchAdData(true, sessionId);
         const data = Array.isArray(result) ? result : result.ads;
-        if (data.length > 0) {
+        const updated = Array.isArray(result) ? null : result.lastUpdated;
+        
+        // Check if we have new data (either more ads or newer timestamp)
+        const hasNewData = data.length > dataCountAtScrapeStart || 
+          (updated && scrapeStartTime && new Date(updated) > scrapeStartTime);
+        
+        if (hasNewData && data.length > 0) {
           applyFetchedData(result);
-          console.log("Data fetched early!");
+          console.log("New data detected! Stopping polling.");
           setIsScraping(false);
+        } else if (data.length > 0) {
+          // Update data even if it's not "new" (to keep it fresh), but continue polling
+          applyFetchedData(result);
+          console.log("Data exists but waiting for new scrape to complete...");
         }
       } catch (error) {
         console.error("Polling failed", error);
