@@ -16,38 +16,28 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  */
 function extractBrandNameFromUrl(url: string): string {
   try {
+    // Facebook Ad Library URLs typically look like:
+    // https://www.facebook.com/ads/library/?id=...
+    // or contain page information
     const urlObj = new URL(url);
     const searchParams = urlObj.searchParams;
     
-    // Facebook Ad Library URLs typically look like:
-    // https://www.facebook.com/ads/library/?active_status=active&search_type=page&view_all_page_id=6490973258
-    // or https://www.facebook.com/ads/library/?id=...
-    
-    // Try to extract from query params (page_name is rarely in URL, but check anyway)
+    // Try to extract from query params
     const pageName = searchParams.get('page_name') || searchParams.get('page');
     if (pageName) {
       return decodeURIComponent(pageName);
     }
     
-    // For Facebook Ad Library URLs, we can't reliably extract the brand name from the URL
-    // The page_id is there, but not the name. We'll use a generic name and update it later
-    // when we scrape the actual ads (which will have page_name)
-    const pageId = searchParams.get('view_all_page_id') || searchParams.get('page_id');
-    if (pageId) {
-      return `Brand ${pageId}`;
-    }
-    
-    // Try to extract from pathname (but skip common paths like 'ads', 'library')
+    // Try to extract from pathname
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
-    const validParts = pathParts.filter(p => !['ads', 'library', ''].includes(p.toLowerCase()));
-    if (validParts.length > 0) {
-      return validParts[validParts.length - 1].replace(/-/g, ' ').replace(/_/g, ' ');
+    if (pathParts.length > 0) {
+      return pathParts[pathParts.length - 1].replace(/-/g, ' ');
     }
     
-    // Fallback: use a generic name that will be updated when ads are scraped
-    return 'Brand';
+    // Fallback: use domain or a generic name
+    return urlObj.hostname.replace('www.', '').split('.')[0] || 'Unknown Brand';
   } catch (error) {
-    return 'Brand';
+    return 'Unknown Brand';
   }
 }
 

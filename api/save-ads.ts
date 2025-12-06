@@ -321,15 +321,11 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
     // Get ad_library_urls for this session to match ads
     const { data: brands } = await supabase
       .from('brands')
-      .select('id, ad_library_url, name')
+      .select('ad_library_url')
       .eq('session_id', sessionId || '')
       .eq('is_active', true);
 
     const brandUrls = brands?.map(b => b.ad_library_url) || [];
-    
-    // Track page names we've seen for each brand URL to update brand names
-    // Use a Map to collect all page_names per brand URL, then use the most common one
-    const brandPageNamesMap: Map<string, string[]> = new Map();
 
     // Process and upsert ads
     const adsToUpsert = [];
@@ -342,120 +338,13 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
 
     for (const item of items) {
       // Try to match item to a brand URL
-      // First, try to get the ad_library_url from the item itself (most reliable)
-      const itemAdLibraryUrl = (item as any).ad_library_url || (item as any).url || '';
-      const itemUrl = String((item as any).ad_snapshot_url || itemAdLibraryUrl || '');
-      
-      // Match to brand URL - prefer exact match, then try includes
-      let matchedBrandUrl: string | undefined;
-      
-      // First, try exact match on ad_library_url
-      if (itemAdLibraryUrl) {
-        matchedBrandUrl = brandUrls.find(url => 
-          url === itemAdLibraryUrl || 
-          itemAdLibraryUrl === url ||
-          url.includes(itemAdLibraryUrl) ||
-          itemAdLibraryUrl.includes(url)
-        );
-      }
-      
-      // If no match, try matching on ad_snapshot_url
-      if (!matchedBrandUrl && itemUrl) {
-        matchedBrandUrl = brandUrls.find(url => {
-          // Extract page_id from URLs for better matching
-          const urlPageId = new URL(url).searchParams.get('view_all_page_id');
-          const itemPageId = itemUrl.includes('view_all_page_id=') 
-            ? new URL(itemUrl).searchParams.get('view_all_page_id')
-            : null;
-          
-          if (urlPageId && itemPageId && urlPageId === itemPageId) {
-            return true;
-          }
-          
-          // Fallback to string matching
-          return itemUrl.includes(url) || url.includes(itemUrl);
-        });
-      }
-      
-      // Final fallback
-      if (!matchedBrandUrl) {
-        matchedBrandUrl = itemAdLibraryUrl || brandUrls[0];
-      }
-
-      // Track page_name for this brand URL to update brand name later
-      // Get page_name from the same place we use in mapApifyItemToAd
-      const pageName = (item as any).page_name 
-        || (item as any).pageName 
-        || (item as any).snapshot?.page_name 
-        || (item as any).ad_snapshot_data?.page_name
-        || (item as any).advertiser?.page?.name
-        || '';
-      
-      // Collect page_name for this brand URL (we'll use the most common one later)
-      // Only collect if matchedBrandUrl is actually in our brandUrls list (not a fallback)
-      if (pageName && 
-          matchedBrandUrl && 
-          brandUrls.includes(matchedBrandUrl) &&
-          pageName !== 'Unknown' && 
-          !pageName.match(/^\d+$/) &&
-          pageName.length > 0) {
-        // Collect all page_names for this brand URL
-        if (!brandPageNamesMap.has(matchedBrandUrl)) {
-          brandPageNamesMap.set(matchedBrandUrl, []);
-        }
-        brandPageNamesMap.get(matchedBrandUrl)!.push(pageName);
-      }
+      const itemUrl = String(item.ad_snapshot_url || item.url || item.ad_library_url || '');
+      const matchedBrandUrl = brandUrls.find(url => 
+        itemUrl.includes(url) || url.includes(itemUrl)
+      ) || itemUrl || brandUrls[0]; // Fallback to first brand or item URL
 
       const adData = mapApifyItemToAd(item, matchedBrandUrl);
       adsToUpsert.push(adData);
-    }
-    
-    // Update brand names with actual page names from the Apify data we just scraped
-    // Use the most common page_name for each brand URL
-    if (brands && brandPageNamesMap.size > 0) {
-      const updatePromises = [];
-      for (const brand of brands) {
-        const pageNames = brandPageNamesMap.get(brand.ad_library_url);
-        if (pageNames && pageNames.length > 0) {
-          // Find the most common page_name (or just use the first one if all are the same)
-          const pageNameCounts = new Map<string, number>();
-          pageNames.forEach(name => {
-            pageNameCounts.set(name, (pageNameCounts.get(name) || 0) + 1);
-          });
-          
-          // Get the most common page_name
-          let mostCommonPageName = pageNames[0];
-          let maxCount = 0;
-          pageNameCounts.forEach((count, name) => {
-            if (count > maxCount) {
-              maxCount = count;
-              mostCommonPageName = name;
-            }
-          });
-          
-          // Update if we have a valid page name from Apify
-          if (mostCommonPageName && 
-              mostCommonPageName !== 'Unknown' &&
-              !mostCommonPageName.match(/^\d+$/) &&
-              mostCommonPageName.length > 0 &&
-              mostCommonPageName !== brand.name) {
-            // Always update if we have a valid page_name from Apify (it's the source of truth)
-            console.log(`Updating brand ${brand.id} name from "${brand.name}" to "${mostCommonPageName}" (from ${pageNames.length} ads)`);
-            updatePromises.push(
-              supabase
-                .from('brands')
-                .update({ name: mostCommonPageName })
-                .eq('id', brand.id)
-            );
-          }
-        }
-      }
-      // Wait for all updates to complete
-      if (updatePromises.length > 0) {
-        const results = await Promise.all(updatePromises);
-        const successCount = results.filter(r => !r.error).length;
-        console.log(`Updated ${successCount} brand name(s) from Apify data`);
-      }
     }
 
     // Perform UPSERT operations

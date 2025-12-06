@@ -176,24 +176,27 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
             <h3 className="text-xs font-semibold tracking-wide uppercase">Filter by Brand</h3>
           </div>
           <div className="space-y-4">
-            {brands.filter(b => b.is_active).map(brand => (
-              <label key={brand.id} className="flex items-center group cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={filters.selectedBrands.includes(brand.name)}
-                  onChange={() => handleBrandToggle(brand.name)}
-                  className="peer sr-only"
-                />
-                <div className="w-5 h-5 border rounded bg-white peer-checked:bg-[#D6453D] peer-checked:border-[#D6453D] peer-focus:ring-2 peer-focus:ring-[#D6453D]/20 transition-all flex items-center justify-center border-stone-300">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100">
-                    <path d="M20 6 9 17l-5-5"></path>
-                  </svg>
-                </div>
-                <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">{brand.name}</span>
-              </label>
-            ))}
-            {brands.filter(b => b.is_active).length === 0 && (
+            {loadingBrands ? (
+              <p className="text-sm text-stone-400">Loading brands...</p>
+            ) : brands.filter(b => b.is_active).length === 0 ? (
               <p className="text-sm text-stone-400">No brands available</p>
+            ) : (
+              brands.filter(b => b.is_active).map(brand => (
+                <label key={brand.id} className="flex items-center group cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={filters.selectedBrands.includes(brand.name)}
+                    onChange={() => handleBrandToggle(brand.name)}
+                    className="peer sr-only"
+                  />
+                  <div className="w-5 h-5 border rounded bg-white peer-checked:bg-[#D6453D] peer-checked:border-[#D6453D] peer-focus:ring-2 peer-focus:ring-[#D6453D]/20 transition-all flex items-center justify-center border-stone-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100">
+                      <path d="M20 6 9 17l-5-5"></path>
+                    </svg>
+                  </div>
+                  <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">{brand.name}</span>
+                </label>
+              ))
             )}
           </div>
         </div>

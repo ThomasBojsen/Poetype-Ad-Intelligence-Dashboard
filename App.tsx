@@ -4,7 +4,7 @@ import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
-import { fetchAdData, triggerScrapeWorkflow, SCRAPE_WAIT_TIME_SECONDS, updateBrandNames } from './services/adService';
+import { fetchAdData, triggerScrapeWorkflow, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
 import { LayoutGrid, Target, Zap, Trophy, RefreshCw } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';
@@ -180,7 +180,6 @@ const App: React.FC = () => {
   // Derived State: Filtered Data
   const filteredData = useMemo(() => {
     return rawData.filter(item => {
-      // Match by page_name (from ads) - this should work with brand names from brands table
       const matchesBrand = filters.selectedBrands.length === 0 || filters.selectedBrands.includes(item.page_name);
       const matchesReach = item.reach >= filters.minReach && item.reach <= filters.maxReach;
       

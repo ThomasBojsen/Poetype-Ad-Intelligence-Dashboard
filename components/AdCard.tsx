@@ -74,8 +74,8 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
             poster={data.thumbnail} 
           />
         ) : data.thumbnail && data.thumbnail.includes('POETYPE-LOGO.svg') ? (
-          <div className="w-full h-full flex items-center justify-center bg-stone-50">
-            <PoetypeLogo className="w-48 h-auto opacity-60" />
+          <div className="w-full h-full flex items-center justify-center bg-stone-50 p-12">
+            <PoetypeLogo className="w-full h-auto max-w-[180px] opacity-50" />
           </div>
         ) : data.thumbnail ? (
           <img 
