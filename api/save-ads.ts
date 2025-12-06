@@ -348,11 +348,11 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
 
       // Track page_name for this brand URL to update brand name later
       // Get page_name from the same place we use in mapApifyItemToAd
-      const pageName = item.page_name 
-        || item.pageName 
-        || item.snapshot?.page_name 
-        || item.ad_snapshot_data?.page_name
-        || item.advertiser?.page?.name
+      const pageName = (item as any).page_name 
+        || (item as any).pageName 
+        || (item as any).snapshot?.page_name 
+        || (item as any).ad_snapshot_data?.page_name
+        || (item as any).advertiser?.page?.name
         || '';
       
       // Store the page_name for this brand URL (use the first valid one we find)
