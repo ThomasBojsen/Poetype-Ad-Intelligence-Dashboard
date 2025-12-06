@@ -68,6 +68,15 @@ const App: React.FC = () => {
       if (data.length > 0) {
         const maxR = Math.max(...data.map(d => d.reach), 0);
         setFilters(prev => ({ ...prev, maxReach: maxR }));
+        
+        // Update brand names from existing ads if we have data
+        // This ensures brand names are correct even if they were generic before
+        updateBrandNames(sessionId).then(() => {
+          // Trigger brands refresh after updating names
+          setBrandsRefreshTrigger(prev => prev + 1);
+        }).catch(err => {
+          console.error('Error updating brand names:', err);
+        });
       }
     } catch (error) {
       console.error('Error loading data:', error);
