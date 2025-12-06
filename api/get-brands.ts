@@ -30,60 +30,25 @@ export default async function handler(
       return res.status(400).json({ error: 'sessionId is required and must be a string' });
     }
 
-    // Step 1: Get ad_library_urls associated with this session_id
+    // Fetch all brands for this session (including inactive ones)
     const { data: brands, error: brandsError } = await supabase
       .from('brands')
-      .select('ad_library_url')
+      .select('id, name, ad_library_url, is_active')
       .eq('session_id', sessionId)
-      .eq('is_active', true);
+      .order('id', { ascending: false });
 
     if (brandsError) {
       console.error('Error fetching brands:', brandsError);
       return res.status(500).json({ error: 'Failed to fetch brands', details: brandsError.message });
     }
 
-    // If no brands found, return empty array
-    if (!brands || brands.length === 0) {
-      return res.status(200).json({
-        success: true,
-        ads: [],
-        count: 0,
-      });
-    }
-
-    const brandUrls = brands.map(b => b.ad_library_url);
-
-    // Step 2: Select ads where ad_library_url is in the list
-    const { data: ads, error: adsError } = await supabase
-      .from('ads')
-      .select('*')
-      .in('ad_library_url', brandUrls)
-      .order('reach', { ascending: false });
-
-    if (adsError) {
-      console.error('Error fetching ads:', adsError);
-      return res.status(500).json({ error: 'Failed to fetch ads', details: adsError.message });
-    }
-
-    // Calculate the most recent last_seen timestamp from all ads
-    let lastUpdated: string | null = null;
-    if (ads && ads.length > 0) {
-      const timestamps = ads
-        .map(ad => ad.last_seen)
-        .filter(ts => ts != null)
-        .sort()
-        .reverse();
-      lastUpdated = timestamps[0] || null;
-    }
-
     return res.status(200).json({
       success: true,
-      ads: ads || [],
-      count: ads?.length || 0,
-      lastUpdated: lastUpdated,
+      brands: brands || [],
+      count: brands?.length || 0,
     });
   } catch (error: any) {
-    console.error('Unexpected error in get-ads:', error);
+    console.error('Unexpected error in get-brands:', error);
     return res.status(500).json({ 
       error: 'Internal server error',
       details: error.message 

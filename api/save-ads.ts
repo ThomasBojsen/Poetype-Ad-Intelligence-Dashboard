@@ -195,6 +195,11 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     }
   }
 
+  // Use Poetype logo as fallback placeholder if no thumbnail found
+  if (!thumbnail) {
+    thumbnail = 'https://poetype.dk/wp-content/uploads/2023/04/POETYPE-LOGO.svg';
+  }
+
   // Extract reach from various possible locations
   // Priority: aaa_info.eu_total_reach > transparency_by_location.eu_transparency.eu_total_reach > reach_estimate
   const reach = item.aaa_info?.eu_total_reach

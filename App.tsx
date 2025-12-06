@@ -17,6 +17,8 @@ const App: React.FC = () => {
   const [rawData, setRawData] = useState<AdData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   
   // Scrape Logic States
   const [isScrapeModalOpen, setIsScrapeModalOpen] = useState(false);
@@ -27,6 +29,7 @@ const App: React.FC = () => {
     selectedBrands: [],
     minReach: 0,
     maxReach: 1000000, // Default max
+    mediaType: 'all',
   });
 
   useEffect(() => {
@@ -44,18 +47,33 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showRefreshing = false) => {
     if (!sessionId) return;
-    setLoading(true);
-    const data = await fetchAdData(true, sessionId); 
-    setRawData(data);
-    
-    // Set dynamic max reach based on data
-    if (data.length > 0) {
-      const maxR = Math.max(...data.map(d => d.reach), 0);
-      setFilters(prev => ({ ...prev, maxReach: maxR }));
+    if (showRefreshing) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
     }
-    setLoading(false);
+    
+    try {
+      const result = await fetchAdData(true, sessionId);
+      const data = Array.isArray(result) ? result : result.ads;
+      const updated = Array.isArray(result) ? null : result.lastUpdated;
+      
+      setRawData(data);
+      setLastUpdated(updated);
+      
+      // Set dynamic max reach based on data
+      if (data.length > 0) {
+        const maxR = Math.max(...data.map(d => d.reach), 0);
+        setFilters(prev => ({ ...prev, maxReach: maxR }));
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
   }, [sessionId]);
 
   useEffect(() => {
@@ -88,8 +106,12 @@ const App: React.FC = () => {
     let cancelled = false;
     let hasSwitchedToFastPolling = false;
 
-    const applyFetchedData = (data: AdData[]) => {
+    const applyFetchedData = (result: any) => {
+      const data = Array.isArray(result) ? result : result.ads;
+      const updated = Array.isArray(result) ? null : result.lastUpdated;
+      
       setRawData(data);
+      setLastUpdated(updated);
       if (data.length > 0) {
         const maxR = Math.max(...data.map(d => d.reach), 0);
         setFilters(prev => ({ ...prev, maxReach: maxR }));
@@ -100,9 +122,10 @@ const App: React.FC = () => {
     const checkData = async () => {
       if (cancelled) return;
       try {
-        const data = await fetchAdData(true, sessionId);
+        const result = await fetchAdData(true, sessionId);
+        const data = Array.isArray(result) ? result : result.ads;
         if (data.length > 0) {
-          applyFetchedData(data);
+          applyFetchedData(result);
           console.log("Data fetched early!");
           setIsScraping(false);
         }
@@ -146,7 +169,6 @@ const App: React.FC = () => {
     };
   }, [isScraping, sessionId]);
 
-
   // Derived State: Unique Brands
   const allBrands = useMemo(() => {
     return Array.from(new Set(rawData.map(d => d.page_name))).sort();
@@ -157,7 +179,20 @@ const App: React.FC = () => {
     return rawData.filter(item => {
       const matchesBrand = filters.selectedBrands.length === 0 || filters.selectedBrands.includes(item.page_name);
       const matchesReach = item.reach >= filters.minReach && item.reach <= filters.maxReach;
-      return matchesBrand && matchesReach;
+      
+      // Media type filter: video has video_url, image has thumbnail but no video_url
+      const isVideo = item.video_url && item.video_url.trim() !== '';
+      const isImage = !isVideo && item.thumbnail && item.thumbnail.trim() !== '';
+      
+      let matchesMediaType = true;
+      if (filters.mediaType === 'video') {
+        matchesMediaType = isVideo;
+      } else if (filters.mediaType === 'image') {
+        matchesMediaType = isImage;
+      }
+      // 'all' matches everything (matchesMediaType stays true)
+      
+      return matchesBrand && matchesReach && matchesMediaType;
     });
   }, [rawData, filters]);
 
@@ -187,7 +222,9 @@ const App: React.FC = () => {
         allBrands={allBrands} 
         filters={filters} 
         setFilters={setFilters}
-        maxReachAvailable={rawData.length > 0 ? Math.max(...rawData.map(d => d.reach)) : 100000} 
+        maxReachAvailable={rawData.length > 0 ? Math.max(...rawData.map(d => d.reach)) : 100000}
+        sessionId={sessionId}
+        onBrandDeleted={() => loadData(true)}
       />
 
       {/* Main Content */}
@@ -204,15 +241,30 @@ const App: React.FC = () => {
                 <h2 className="text-3xl font-semibold tracking-tight text-[#0B1221]">Top Performing Video Ads</h2>
               </div>
               <p className="text-lg pl-10 text-stone-500 font-medium">Live insight in the best performing ads</p>
+              {lastUpdated && (
+                <p className="text-sm pl-10 text-stone-400 mt-1">
+                  Last updated: {new Date(lastUpdated).toLocaleString()}
+                </p>
+              )}
             </div>
             
-            <button 
-              onClick={() => setIsScrapeModalOpen(true)}
-              className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ring-1 ring-white/10 bg-[#0B1221] hover:bg-stone-800"
-            >
-              <RefreshCw size={16} strokeWidth={1.5} />
-              Update Data
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => loadData(true)}
+                disabled={isRefreshing}
+                className="inline-flex items-center gap-2 text-stone-600 px-4 py-2.5 rounded-full text-sm font-medium transition-all border border-[#EADFD8] bg-white hover:bg-[#FFF8F5] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw size={16} strokeWidth={1.5} className={isRefreshing ? 'animate-spin' : ''} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+              <button 
+                onClick={() => setIsScrapeModalOpen(true)}
+                className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ring-1 ring-white/10 bg-[#0B1221] hover:bg-stone-800"
+              >
+                <RefreshCw size={16} strokeWidth={1.5} />
+                Update Data
+              </button>
+            </div>
           </header>
 
           {/* Stats Grid */}
@@ -256,26 +308,40 @@ const App: React.FC = () => {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#D6453D]"></div>
             </div>
-          ) : filteredData.length === 0 ? (
-            /* Empty State */
-            <div className="flex flex-col items-center justify-center h-80 text-stone-400 border-2 border-dashed border-[#EADFD8] rounded-2xl bg-white/50">
-              <LayoutGrid size={48} className="mb-4 opacity-20 text-[#D6453D]" />
-              <p className="text-lg font-medium text-stone-500">No ads found matching your filters</p>
-              <button 
-                onClick={() => setFilters(prev => ({ ...prev, selectedBrands: [], minReach: 0 }))}
-                className="mt-4 text-[#D6453D] font-bold hover:underline cursor-pointer"
-              >
-                Clear Filters
-              </button>
-            </div>
           ) : (
-            /* Video Grid */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredData.map((ad, index) => (
-                <div key={ad.id} className="animate-reveal" style={{ animationDelay: `${300 + index * 100}ms` }}>
-                  <AdCard data={ad} />
+            <div className="relative">
+              {/* Refresh Loading Overlay */}
+              {isRefreshing && (
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-2xl border border-[#EADFD8] flex items-center justify-center z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <RefreshCw size={24} strokeWidth={1.5} className="animate-spin text-[#D6453D]" />
+                    <p className="text-sm font-medium text-stone-600">Refreshing data...</p>
+                  </div>
                 </div>
-              ))}
+              )}
+              
+              {filteredData.length === 0 ? (
+                /* Empty State */
+                <div className="flex flex-col items-center justify-center h-80 text-stone-400 border-2 border-dashed border-[#EADFD8] rounded-2xl bg-white/50">
+                  <LayoutGrid size={48} className="mb-4 opacity-20 text-[#D6453D]" />
+                  <p className="text-lg font-medium text-stone-500">No ads found matching your filters</p>
+                  <button 
+                    onClick={() => setFilters(prev => ({ ...prev, selectedBrands: [], minReach: 0, mediaType: 'all' }))}
+                    className="mt-4 text-[#D6453D] font-bold hover:underline cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              ) : (
+                /* Video Grid */
+                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 ${isRefreshing ? 'opacity-50' : ''}`}>
+                  {filteredData.map((ad, index) => (
+                    <div key={ad.id} className="animate-reveal" style={{ animationDelay: `${300 + index * 100}ms` }}>
+                      <AdCard data={ad} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

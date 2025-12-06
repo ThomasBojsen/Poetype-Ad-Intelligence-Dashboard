@@ -13,4 +13,5 @@ export interface FilterState {
   selectedBrands: string[];
   minReach: number;
   maxReach: number;
+  mediaType: 'all' | 'video' | 'image';
 }

@@ -19,7 +19,7 @@ const MOCK_DATA: AdData[] = [
   },
 ];
 
-export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string): Promise<AdData[]> => {
+export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string): Promise<{ ads: AdData[], lastUpdated: string | null } | AdData[]> => {
   if (!useRealUrl) {
     await new Promise(resolve => setTimeout(resolve, 800));
     return MOCK_DATA;
@@ -27,7 +27,7 @@ export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string
 
   if (!sessionId) {
     console.warn("No sessionId provided, returning empty array");
-    return [];
+    return { ads: [], lastUpdated: null };
   }
 
   try {
@@ -50,7 +50,7 @@ export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string
     }
 
     // Map backend format (thumbnail_url) to frontend format (thumbnail)
-    return (result.ads || []).map((ad: any) => ({
+    const mappedAds = (result.ads || []).map((ad: any) => ({
       id: ad.id,
       page_name: ad.page_name,
       reach: ad.reach,
@@ -60,9 +60,15 @@ export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string
       heading: ad.heading || '',
       ad_copy: ad.ad_copy || '',
     }));
+
+    // Return ads with lastUpdated timestamp
+    return {
+      ads: mappedAds,
+      lastUpdated: result.lastUpdated || null,
+    };
   } catch (error) {
     console.error("Error fetching data from API", error);
-    return []; 
+    return { ads: [], lastUpdated: null }; 
   }
 };
 
@@ -128,6 +134,62 @@ export const triggerScrapeWorkflow = async (urls: string[], sessionId: string): 
     return true;
   } catch (error) {
     console.error("Failed to trigger scrape workflow", error);
+    return false;
+  }
+};
+
+/**
+ * Fetch brands for a session
+ */
+export const fetchBrands = async (sessionId: string): Promise<{ id: number | string; name: string; ad_library_url: string; is_active: boolean }[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/get-brands?sessionId=${encodeURIComponent(sessionId)}`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch brands: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch brands');
+    }
+
+    return result.brands || [];
+  } catch (error) {
+    console.error("Error fetching brands:", error);
+    return []; 
+  }
+};
+
+/**
+ * Delete a brand (soft delete: sets is_active to false)
+ */
+export const deleteBrand = async (sessionId: string, brandId: number | string): Promise<boolean> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/delete-brand`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId, brandId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Failed to delete brand:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error deleting brand:", error);
     return false;
   }
 };
