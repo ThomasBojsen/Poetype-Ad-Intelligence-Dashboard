@@ -91,7 +91,7 @@ export default async function handler(
         {
           eventTypes: ['ACTOR.RUN.SUCCEEDED'],
           requestUrl: webhookUrl,
-          payloadTemplate: `{"runId":"{{runId}}","defaultDatasetId":"{{defaultDatasetId}}","sessionId":"${sessionId}"}`,
+          payloadTemplate: `{"runId":"{{resource.id}}","defaultDatasetId":"{{resource.defaultDatasetId}}","sessionId":"${sessionId}"}`,
         },
       ],
     });

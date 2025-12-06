@@ -76,48 +76,36 @@ export default async function handler(
 
   try {
     // Apify webhook sends event data in different formats
-    // Check for event.data (Apify's standard format) or custom payload template
+    // Check for resource object (Apify's standard format) or custom payload template
+    const resource = req.body.resource || req.body.data?.resource;
     const eventData = req.body.data || req.body;
-    const runId = eventData.runId || req.body.runId || eventData.id;
+    
+    // Try to get runId from multiple possible locations
+    const runId = resource?.id || eventData.runId || req.body.runId || eventData.id || resource?.runId;
     const sessionId = eventData.sessionId || req.body.sessionId;
     
-    // Apify might send run info directly in the event
-    const runFromEvent = eventData.run || eventData;
+    // Try to get dataset ID from multiple possible locations
+    const datasetId = resource?.defaultDatasetId || eventData.defaultDatasetId || req.body.defaultDatasetId;
 
     console.log('Webhook payload:', JSON.stringify(req.body, null, 2));
     console.log('Extracted runId:', runId);
-    console.log('Event data:', JSON.stringify(eventData, null, 2));
+    console.log('Extracted datasetId:', datasetId);
+    console.log('Resource object:', JSON.stringify(resource, null, 2));
 
     if (!runId || runId.includes('{{')) {
-      // If runId contains template syntax, it wasn't replaced - try to get from event
-      const actualRunId = runFromEvent?.id || runFromEvent?.runId;
-      if (!actualRunId) {
-        return res.status(400).json({ 
-          error: 'Missing or invalid runId in webhook payload',
-          received: runId,
-          body: req.body 
-        });
-      }
-      // Use the actual runId from event
-      const finalRunId = actualRunId;
-      const finalDatasetId = runFromEvent?.defaultDatasetId;
-      
-      if (finalDatasetId) {
-        // We have dataset ID from event, use it directly
-        return await processDataset(finalDatasetId, sessionId, res);
-      }
-      
-      // Fallback: fetch run
-      return await fetchAndProcessRun(finalRunId, sessionId, res);
+      return res.status(400).json({ 
+        error: 'Missing or invalid runId in webhook payload',
+        received: runId,
+        body: req.body 
+      });
     }
 
-    // Try to get dataset ID from event first
-    const datasetIdFromEvent = runFromEvent?.defaultDatasetId || eventData.defaultDatasetId;
-    if (datasetIdFromEvent) {
-      return await processDataset(datasetIdFromEvent, sessionId, res);
+    // If we have datasetId directly, use it
+    if (datasetId && !datasetId.includes('{{')) {
+      return await processDataset(datasetId, sessionId, res);
     }
 
-    // Fallback: fetch run object
+    // Fallback: fetch run object to get dataset ID
     return await fetchAndProcessRun(runId, sessionId, res);
   } catch (error: any) {
     console.error('Unexpected error in save-ads:', error);
