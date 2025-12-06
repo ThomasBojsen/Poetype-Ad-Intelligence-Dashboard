@@ -180,6 +180,7 @@ const App: React.FC = () => {
   // Derived State: Filtered Data
   const filteredData = useMemo(() => {
     return rawData.filter(item => {
+      // Match by page_name (from ads) - this should work with brand names from brands table
       const matchesBrand = filters.selectedBrands.length === 0 || filters.selectedBrands.includes(item.page_name);
       const matchesReach = item.reach >= filters.minReach && item.reach <= filters.maxReach;
       

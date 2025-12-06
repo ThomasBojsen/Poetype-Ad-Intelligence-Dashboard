@@ -124,10 +124,10 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
     <aside className="w-80 flex flex-col border-r bg-white hidden md:flex h-full flex-shrink-0 border-[#EADFD8] animate-sidebar">
       {/* Logo Area */}
       <div className="p-8 border-b border-[#F5EBE6]">
-        <div className="mb-2">
+        <div className="mb-3">
           <PoetypeLogo className="w-full h-auto max-h-8" />
         </div>
-        <p className="text-xs font-medium tracking-wider uppercase text-stone-400 mt-2">Ad Intelligence Dashboard</p>
+        <p className="text-xs font-medium tracking-wider uppercase text-stone-400">Ad Intelligence Dashboard</p>
       </div>
 
       {/* Filters */}
@@ -179,12 +179,12 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
             <h3 className="text-xs font-semibold tracking-wide uppercase">Filter by Brand</h3>
           </div>
           <div className="space-y-4">
-            {allBrands.map(brand => (
-              <label key={brand} className="flex items-center group cursor-pointer">
+            {brands.filter(b => b.is_active).map(brand => (
+              <label key={brand.id} className="flex items-center group cursor-pointer">
                 <input 
                   type="checkbox" 
-                  checked={filters.selectedBrands.includes(brand)}
-                  onChange={() => handleBrandToggle(brand)}
+                  checked={filters.selectedBrands.includes(brand.name)}
+                  onChange={() => handleBrandToggle(brand.name)}
                   className="peer sr-only"
                 />
                 <div className="w-5 h-5 border rounded bg-white peer-checked:bg-[#D6453D] peer-checked:border-[#D6453D] peer-focus:ring-2 peer-focus:ring-[#D6453D]/20 transition-all flex items-center justify-center border-stone-300">
@@ -192,9 +192,12 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
                     <path d="M20 6 9 17l-5-5"></path>
                   </svg>
                 </div>
-                <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">{brand}</span>
+                <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">{brand.name}</span>
               </label>
             ))}
+            {brands.filter(b => b.is_active).length === 0 && (
+              <p className="text-sm text-stone-400">No brands available</p>
+            )}
           </div>
         </div>
 
