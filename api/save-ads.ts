@@ -85,15 +85,13 @@ export default async function handler(
       return res.status(400).json({ error: 'Missing runId in webhook payload' });
     }
 
-    // If datasetId not provided, fetch it from the run
-    let finalDatasetId = datasetId;
-    if (!finalDatasetId) {
-      const run = await apifyClient.run(runId).get();
-      finalDatasetId = run.defaultDatasetId;
-    }
+    // Always fetch dataset ID from the run object to ensure we have the actual ID
+    // (webhook payload template might not be processed correctly)
+    const run = await apifyClient.run(runId).get();
+    const finalDatasetId = run.defaultDatasetId;
 
     if (!finalDatasetId) {
-      return res.status(400).json({ error: 'Could not determine datasetId' });
+      return res.status(400).json({ error: 'Could not determine datasetId from run' });
     }
 
     // Fetch dataset items from Apify
