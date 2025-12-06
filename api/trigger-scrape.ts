@@ -21,14 +21,15 @@ const apifyClient = new ApifyClient({ token: apifyToken });
 /**
  * Construct the webhook URL for Apify to call on completion
  */
-function getWebhookUrl(): string {
+function getWebhookUrl(sessionId: string): string {
   // In production, use the actual Vercel deployment URL
   // In development, you might need to use ngrok or similar
   const baseUrl = vercelUrl 
     ? `https://${vercelUrl}` 
     : process.env.WEBHOOK_BASE_URL || 'http://localhost:3000';
   
-  return `${baseUrl}/api/save-ads`;
+  // Pass sessionId as query parameter
+  return `${baseUrl}/api/save-ads?sessionId=${encodeURIComponent(sessionId)}`;
 }
 
 export default async function handler(
@@ -81,25 +82,19 @@ export default async function handler(
       })),
     };
 
-    // Step 4: Configure webhook URL
-    const webhookUrl = getWebhookUrl();
+    // Step 4: Configure webhook URL with sessionId as query parameter
+    const webhookUrl = getWebhookUrl(sessionId);
     
     // Step 5: Start Apify Actor run
-    // Store sessionId in run options so we can retrieve it from the webhook
     const run = await apifyClient.actor('curious_coder/facebook-ads-library-scraper').start(apifyInput, {
       waitForFinish: 0, // Don't wait, let it run async (0 = no wait)
       webhooks: [
         {
           eventTypes: ['ACTOR.RUN.SUCCEEDED'],
           requestUrl: webhookUrl,
-          // Don't use custom payload template - Apify sends resource data by default
-          // We'll get sessionId from the run's options or tags
+          // Apify sends resource data by default, sessionId is in query param
         },
       ],
-      // Store sessionId in run options for later retrieval
-      options: {
-        tags: [`sessionId:${sessionId}`],
-      },
     });
 
     return res.status(200).json({

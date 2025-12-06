@@ -80,30 +80,21 @@ export default async function handler(
     const resource = req.body.resource || req.body.data?.resource;
     const runId = resource?.id;
     const datasetId = resource?.defaultDatasetId;
+    
+    // Get sessionId from query parameter (passed in webhook URL)
+    const sessionId = req.query.sessionId as string | undefined;
 
     console.log('Webhook payload:', JSON.stringify(req.body, null, 2));
     console.log('Resource object:', JSON.stringify(resource, null, 2));
     console.log('Extracted runId:', runId);
     console.log('Extracted datasetId:', datasetId);
+    console.log('Extracted sessionId from query:', sessionId);
 
     if (!runId) {
       return res.status(400).json({ 
         error: 'Missing runId in webhook payload',
         body: req.body 
       });
-    }
-
-    // Fetch the run to get sessionId from tags
-    let sessionId: string | undefined;
-    try {
-      const run = await apifyClient.run(runId).get();
-      // Extract sessionId from tags (format: "sessionId:xxx")
-      const sessionTag = run.tags?.find((tag: string) => tag.startsWith('sessionId:'));
-      if (sessionTag) {
-        sessionId = sessionTag.split(':')[1];
-      }
-    } catch (error) {
-      console.warn('Could not fetch run to get sessionId:', error);
     }
 
     // If we have datasetId directly, use it
