@@ -86,7 +86,7 @@ export default async function handler(
     
     // Step 5: Start Apify Actor run
     const run = await apifyClient.actor('curious_coder/facebook-ads-library-scraper').start(apifyInput, {
-      waitForFinish: false, // Don't wait, let it run async
+      waitForFinish: 0, // Don't wait, let it run async (0 = no wait)
       webhooks: [
         {
           eventTypes: ['ACTOR.RUN.SUCCEEDED'],
