@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { AdData } from '../types';
-import { ExternalLink, Eye, MessageSquareText, VideoOff, Play } from 'lucide-react';
+import { ExternalLink, Eye, MessageSquareText, VideoOff, Play, Pause } from 'lucide-react';
 
 interface AdCardProps {
   data: AdData;
@@ -9,8 +9,25 @@ interface AdCardProps {
 const AdCard: React.FC<AdCardProps> = ({ data }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const reachDisplay = data.reach >= 1000 ? `${(data.reach / 1000).toFixed(1)}k` : data.reach.toString();
+
+  const handlePlayPause = () => {
+    if (!videoRef.current) return;
+    
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const handleVideoPlay = () => setIsPlaying(true);
+  const handleVideoPause = () => setIsPlaying(false);
 
   return (
     <div className="bg-white rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group border-[#EADFD8]">
@@ -18,10 +35,13 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
       <div className="relative aspect-video overflow-hidden bg-stone-100">
         {data.video_url && !videoError ? (
           <video 
+            ref={videoRef}
             src={data.video_url}
             className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
-            controls
+            controls={isPlaying}
             onError={() => setVideoError(true)}
+            onPlay={handleVideoPlay}
+            onPause={handleVideoPause}
             poster={data.thumbnail} 
           />
         ) : data.thumbnail ? (
@@ -37,12 +57,29 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
           </div>
         )}
         
-        {/* Play Button Overlay */}
-        <div className="absolute inset-0 bg-black/10 flex items-center justify-center group-hover:bg-black/20 transition-colors">
-          <div className="flex group-hover:scale-110 transition-transform text-white bg-black/30 w-14 h-14 border-white/20 border rounded-full backdrop-blur-sm items-center justify-center">
-            <Play size={24} strokeWidth={1.5} className="fill-current ml-1" />
+        {/* Play Button Overlay - Only show when video exists and not playing */}
+        {data.video_url && !videoError && !isPlaying && (
+          <div 
+            className="absolute inset-0 bg-black/10 flex items-center justify-center group-hover:bg-black/20 transition-colors cursor-pointer z-10"
+            onClick={handlePlayPause}
+          >
+            <div className="flex group-hover:scale-110 transition-transform text-white bg-black/30 w-14 h-14 border-white/20 border rounded-full backdrop-blur-sm items-center justify-center">
+              <Play size={24} strokeWidth={1.5} className="fill-current ml-1" />
+            </div>
           </div>
-        </div>
+        )}
+        
+        {/* Pause Button Overlay - Show when playing */}
+        {data.video_url && !videoError && isPlaying && (
+          <div 
+            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+            onClick={handlePlayPause}
+          >
+            <div className="flex text-white bg-black/30 w-14 h-14 border-white/20 border rounded-full backdrop-blur-sm items-center justify-center">
+              <Pause size={24} strokeWidth={1.5} className="fill-current" />
+            </div>
+          </div>
+        )}
         
         {/* Reach Badge */}
         <div className="absolute top-3 right-3 backdrop-blur text-white text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-white/10 shadow-sm bg-[#0B1221]/80">
