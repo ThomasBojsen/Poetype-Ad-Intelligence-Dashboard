@@ -75,25 +75,88 @@ export default async function handler(
   }
 
   try {
-    // Extract webhook payload
-    // Apify webhook payload structure may vary, handle both formats
-    const runId = req.body.runId || req.body.data?.runId;
-    const datasetId = req.body.datasetId || req.body.data?.defaultDatasetId || req.body.defaultDatasetId;
-    const sessionId = req.body.sessionId || req.body.data?.sessionId;
+    // Apify webhook sends event data in different formats
+    // Check for event.data (Apify's standard format) or custom payload template
+    const eventData = req.body.data || req.body;
+    const runId = eventData.runId || req.body.runId || eventData.id;
+    const sessionId = eventData.sessionId || req.body.sessionId;
+    
+    // Apify might send run info directly in the event
+    const runFromEvent = eventData.run || eventData;
 
-    if (!runId) {
-      return res.status(400).json({ error: 'Missing runId in webhook payload' });
+    console.log('Webhook payload:', JSON.stringify(req.body, null, 2));
+    console.log('Extracted runId:', runId);
+    console.log('Event data:', JSON.stringify(eventData, null, 2));
+
+    if (!runId || runId.includes('{{')) {
+      // If runId contains template syntax, it wasn't replaced - try to get from event
+      const actualRunId = runFromEvent?.id || runFromEvent?.runId;
+      if (!actualRunId) {
+        return res.status(400).json({ 
+          error: 'Missing or invalid runId in webhook payload',
+          received: runId,
+          body: req.body 
+        });
+      }
+      // Use the actual runId from event
+      const finalRunId = actualRunId;
+      const finalDatasetId = runFromEvent?.defaultDatasetId;
+      
+      if (finalDatasetId) {
+        // We have dataset ID from event, use it directly
+        return await processDataset(finalDatasetId, sessionId, res);
+      }
+      
+      // Fallback: fetch run
+      return await fetchAndProcessRun(finalRunId, sessionId, res);
     }
 
-    // Always fetch dataset ID from the run object to ensure we have the actual ID
-    // (webhook payload template might not be processed correctly)
-    const run = await apifyClient.run(runId).get();
-    const finalDatasetId = run.defaultDatasetId;
-
-    if (!finalDatasetId) {
-      return res.status(400).json({ error: 'Could not determine datasetId from run' });
+    // Try to get dataset ID from event first
+    const datasetIdFromEvent = runFromEvent?.defaultDatasetId || eventData.defaultDatasetId;
+    if (datasetIdFromEvent) {
+      return await processDataset(datasetIdFromEvent, sessionId, res);
     }
 
+    // Fallback: fetch run object
+    return await fetchAndProcessRun(runId, sessionId, res);
+  } catch (error: any) {
+    console.error('Unexpected error in save-ads:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message 
+    });
+  }
+}
+
+async function fetchAndProcessRun(runId: string, sessionId: string | undefined, res: VercelResponse) {
+  let run;
+  try {
+    run = await apifyClient.run(runId).get();
+  } catch (error: any) {
+    console.error('Error fetching run from Apify:', error);
+    return res.status(400).json({ 
+      error: 'Failed to fetch run from Apify',
+      details: error.message,
+      runId 
+    });
+  }
+
+  if (!run) {
+    return res.status(400).json({ error: 'Run not found', runId });
+  }
+
+  const finalDatasetId = run.defaultDatasetId;
+
+  if (!finalDatasetId) {
+    console.error('Run object:', JSON.stringify(run, null, 2));
+    return res.status(400).json({ error: 'Could not determine datasetId from run', runId });
+  }
+
+  return await processDataset(finalDatasetId, sessionId, res);
+}
+
+async function processDataset(finalDatasetId: string, sessionId: string | undefined, res: VercelResponse) {
+  try {
     // Fetch dataset items from Apify
     const dataset = await apifyClient.dataset(finalDatasetId);
     const { items } = await dataset.listItems();
@@ -171,10 +234,9 @@ export default async function handler(
       message: `Processed ${adsToUpsert.length} ads`,
       saved: successful,
       failed: failed,
-      runId,
     });
   } catch (error: any) {
-    console.error('Unexpected error in save-ads:', error);
+    console.error('Unexpected error in processDataset:', error);
     return res.status(500).json({ 
       error: 'Internal server error',
       details: error.message 
