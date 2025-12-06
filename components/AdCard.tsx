@@ -63,16 +63,23 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
       {/* Video/Thumbnail Section */}
       <div className="relative aspect-video overflow-hidden bg-stone-100">
         {data.video_url && !videoError ? (
-          <video 
-            ref={videoRef}
-            src={data.video_url}
-            className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
-            controls={isPlaying}
-            onError={() => setVideoError(true)}
-            onPlay={handleVideoPlay}
-            onPause={handleVideoPause}
-            poster={data.thumbnail} 
-          />
+          <>
+            {!isPlaying && data.thumbnail && data.thumbnail.includes('POETYPE-LOGO.svg') ? (
+              <div className="w-full h-full flex items-center justify-center bg-stone-50 p-12 absolute inset-0 z-0">
+                <PoetypeLogo className="w-full h-auto max-w-[180px] opacity-50" />
+              </div>
+            ) : null}
+            <video 
+              ref={videoRef}
+              src={data.video_url}
+              className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500 relative z-10"
+              controls={isPlaying}
+              onError={() => setVideoError(true)}
+              onPlay={handleVideoPlay}
+              onPause={handleVideoPause}
+              poster={data.thumbnail && !data.thumbnail.includes('POETYPE-LOGO.svg') ? data.thumbnail : undefined}
+            />
+          </>
         ) : data.thumbnail && data.thumbnail.includes('POETYPE-LOGO.svg') ? (
           <div className="w-full h-full flex items-center justify-center bg-stone-50 p-12">
             <PoetypeLogo className="w-full h-auto max-w-[180px] opacity-50" />

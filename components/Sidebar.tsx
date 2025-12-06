@@ -47,12 +47,20 @@ interface SidebarProps {
   sessionId: string | null;
   onBrandDeleted?: () => void;
   refreshTrigger?: number; // Trigger refresh when this changes
+  rawData?: Array<{ page_name: string; ad_library_url: string }>; // Ads data to map brands to page names
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxReachAvailable, sessionId, onBrandDeleted, refreshTrigger }) => {
+const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxReachAvailable, sessionId, onBrandDeleted, refreshTrigger, rawData = [] }) => {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(false);
   const [deletingId, setDeletingId] = useState<number | string | null>(null);
+
+  // Map brand URLs to page names from ads data
+  const getPageNameForBrand = (adLibraryUrl: string): string => {
+    // Find the first ad with matching ad_library_url and return its page_name
+    const matchingAd = rawData.find(ad => ad.ad_library_url === adLibraryUrl);
+    return matchingAd?.page_name || '';
+  };
 
   // Function to load brands (can be called externally)
   const loadBrands = React.useCallback(async () => {
@@ -142,29 +150,32 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
             <p className="text-sm text-stone-400">No brands added yet. Use "Update Data" to add brands.</p>
           ) : (
             <div className="space-y-2">
-              {brands.filter(b => b.is_active).map(brand => (
-                <div 
-                  key={brand.id} 
-                  className="flex items-center justify-between group p-2 rounded-lg hover:bg-[#FFF8F5] transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-stone-700 truncate">{brand.name}</p>
-                    <p className="text-xs text-stone-400 truncate">{brand.ad_library_url}</p>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteBrand(brand.id)}
-                    disabled={deletingId === brand.id}
-                    className="ml-2 p-1.5 text-stone-400 hover:text-[#D6453D] hover:bg-[#FFF2EB] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Delete brand"
+              {brands.filter(b => b.is_active).map(brand => {
+                const pageName = getPageNameForBrand(brand.ad_library_url) || brand.name;
+                return (
+                  <div 
+                    key={brand.id} 
+                    className="flex items-center justify-between group p-2 rounded-lg hover:bg-[#FFF8F5] transition-colors"
                   >
-                    {deletingId === brand.id ? (
-                      <X size={14} className="animate-spin" />
-                    ) : (
-                      <Trash2 size={14} />
-                    )}
-                  </button>
-                </div>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-stone-700 truncate">{pageName}</p>
+                      <p className="text-xs text-stone-400 truncate">{brand.ad_library_url}</p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteBrand(brand.id)}
+                      disabled={deletingId === brand.id}
+                      className="ml-2 p-1.5 text-stone-400 hover:text-[#D6453D] hover:bg-[#FFF2EB] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete brand"
+                    >
+                      {deletingId === brand.id ? (
+                        <X size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

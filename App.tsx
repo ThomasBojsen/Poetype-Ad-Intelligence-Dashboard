@@ -232,6 +232,7 @@ const App: React.FC = () => {
           setBrandsRefreshTrigger(prev => prev + 1);
         }}
         refreshTrigger={brandsRefreshTrigger}
+        rawData={rawData}
       />
 
       {/* Main Content */}
