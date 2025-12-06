@@ -124,10 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
     <aside className="w-80 flex flex-col border-r bg-white hidden md:flex h-full flex-shrink-0 border-[#EADFD8] animate-sidebar">
       {/* Logo Area */}
       <div className="p-8 border-b border-[#F5EBE6]">
-        <div className="mb-3">
-          <PoetypeLogo className="w-full h-auto max-h-8" />
-        </div>
-        <p className="text-xs font-medium tracking-wider uppercase text-stone-400">Ad Intelligence Dashboard</p>
+        <PoetypeLogo className="w-full h-auto max-h-8" />
       </div>
 
       {/* Filters */}

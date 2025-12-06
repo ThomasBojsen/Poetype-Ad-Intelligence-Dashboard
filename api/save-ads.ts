@@ -321,11 +321,14 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
     // Get ad_library_urls for this session to match ads
     const { data: brands } = await supabase
       .from('brands')
-      .select('ad_library_url')
+      .select('id, ad_library_url, name')
       .eq('session_id', sessionId || '')
       .eq('is_active', true);
 
     const brandUrls = brands?.map(b => b.ad_library_url) || [];
+    
+    // Track page names we've seen for each brand URL to update brand names
+    const brandPageNames: Map<string, string> = new Map();
 
     // Process and upsert ads
     const adsToUpsert = [];
@@ -343,8 +346,28 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
         itemUrl.includes(url) || url.includes(itemUrl)
       ) || itemUrl || brandUrls[0]; // Fallback to first brand or item URL
 
+      // Track page_name for this brand URL to update brand name later
+      const pageName = item.page_name || item.snapshot?.page_name || '';
+      if (pageName && matchedBrandUrl) {
+        brandPageNames.set(matchedBrandUrl, pageName);
+      }
+
       const adData = mapApifyItemToAd(item, matchedBrandUrl);
       adsToUpsert.push(adData);
+    }
+    
+    // Update brand names with actual page names from scraped ads
+    if (brands && brandPageNames.size > 0) {
+      for (const brand of brands) {
+        const pageName = brandPageNames.get(brand.ad_library_url);
+        if (pageName && brand.name !== pageName && (brand.name === 'Brand' || brand.name.startsWith('Brand '))) {
+          // Only update if current name is generic
+          await supabase
+            .from('brands')
+            .update({ name: pageName })
+            .eq('id', brand.id);
+        }
+      }
     }
 
     // Perform UPSERT operations
