@@ -4,7 +4,7 @@ import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
-import { fetchAdData, triggerScrapeWorkflow, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
+import { fetchAdData, triggerScrapeWorkflow, SCRAPE_WAIT_TIME_SECONDS, updateBrandNames } from './services/adService';
 import { LayoutGrid, Target, Zap, Trophy, RefreshCw } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';

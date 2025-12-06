@@ -194,5 +194,33 @@ export const deleteBrand = async (sessionId: string, brandId: number | string): 
   }
 };
 
+/**
+ * Update brand names from existing ads in the database
+ */
+export const updateBrandNames = async (sessionId: string): Promise<boolean> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/update-brand-names`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Failed to update brand names:", error);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log("Brand names updated:", result);
+    return true;
+  } catch (error) {
+    console.error("Error updating brand names:", error);
+    return false;
+  }
+};
+
 // CSV parsing and video URL cleaning functions removed - no longer needed
 // Data now comes directly from the API

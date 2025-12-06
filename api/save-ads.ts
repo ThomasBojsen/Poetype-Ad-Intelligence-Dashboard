@@ -347,8 +347,22 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
       ) || itemUrl || brandUrls[0]; // Fallback to first brand or item URL
 
       // Track page_name for this brand URL to update brand name later
-      const pageName = item.page_name || item.snapshot?.page_name || '';
-      if (pageName && matchedBrandUrl) {
+      // Get page_name from the same place we use in mapApifyItemToAd
+      const pageName = item.page_name 
+        || item.pageName 
+        || item.snapshot?.page_name 
+        || item.ad_snapshot_data?.page_name
+        || item.advertiser?.page?.name
+        || '';
+      
+      // Store the page_name for this brand URL (use the first valid one we find)
+      if (pageName && 
+          matchedBrandUrl && 
+          pageName !== 'Unknown' && 
+          !pageName.match(/^\d+$/) &&
+          pageName.length > 0 &&
+          !brandPageNames.has(matchedBrandUrl)) {
+        // Only set if we don't already have a page_name for this brand URL
         brandPageNames.set(matchedBrandUrl, pageName);
       }
 
@@ -356,17 +370,32 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
       adsToUpsert.push(adData);
     }
     
-    // Update brand names with actual page names from scraped ads
+    // Update brand names with actual page names from the Apify data we just scraped
     if (brands && brandPageNames.size > 0) {
+      const updatePromises = [];
       for (const brand of brands) {
         const pageName = brandPageNames.get(brand.ad_library_url);
-        if (pageName && brand.name !== pageName && (brand.name === 'Brand' || brand.name.startsWith('Brand '))) {
-          // Only update if current name is generic
-          await supabase
-            .from('brands')
-            .update({ name: pageName })
-            .eq('id', brand.id);
+        // Update if we have a valid page name from Apify
+        if (pageName && 
+            pageName !== 'Unknown' &&
+            !pageName.match(/^\d+$/) &&
+            pageName.length > 0 &&
+            pageName !== brand.name) {
+          // Always update if we have a valid page_name from Apify (it's the source of truth)
+          console.log(`Updating brand ${brand.id} name from "${brand.name}" to "${pageName}" (from Apify data)`);
+          updatePromises.push(
+            supabase
+              .from('brands')
+              .update({ name: pageName })
+              .eq('id', brand.id)
+          );
         }
+      }
+      // Wait for all updates to complete
+      if (updatePromises.length > 0) {
+        const results = await Promise.all(updatePromises);
+        const successCount = results.filter(r => !r.error).length;
+        console.log(`Updated ${successCount} brand name(s) from Apify data`);
       }
     }
 
