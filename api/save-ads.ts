@@ -124,7 +124,7 @@ export default async function handler(
 
     for (const item of items) {
       // Try to match item to a brand URL
-      const itemUrl = item.ad_snapshot_url || item.url || item.ad_library_url || '';
+      const itemUrl = String(item.ad_snapshot_url || item.url || item.ad_library_url || '');
       const matchedBrandUrl = brandUrls.find(url => 
         itemUrl.includes(url) || url.includes(itemUrl)
       ) || itemUrl || brandUrls[0]; // Fallback to first brand or item URL
