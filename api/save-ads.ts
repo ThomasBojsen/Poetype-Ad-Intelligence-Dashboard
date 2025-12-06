@@ -110,8 +110,10 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
   }
 
   // Extract heading from various possible locations
-  // Common patterns: adText, adTitle, title, headline, snapshot.title, snapshot.body
-  const heading = item.heading 
+  // Priority: snapshot.cards[0].title (actual title) > snapshot.title (may be template variable)
+  const heading = (item.snapshot?.cards && Array.isArray(item.snapshot.cards) && item.snapshot.cards.length > 0 && item.snapshot.cards[0]?.title)
+    || (item.ad_snapshot_data?.snapshot?.cards && Array.isArray(item.ad_snapshot_data.snapshot.cards) && item.ad_snapshot_data.snapshot.cards.length > 0 && item.ad_snapshot_data.snapshot.cards[0]?.title)
+    || item.heading 
     || item.title 
     || item.adTitle
     || item.adText
@@ -126,12 +128,14 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || item.snapshot?.title
     || item.snapshot?.adTitle
     || item.snapshot?.adText
-    || item.snapshot?.body
+    || (item.snapshot?.body && typeof item.snapshot.body === 'string' ? item.snapshot.body : item.snapshot?.body?.text)
     || '';
 
   // Extract ad copy from various possible locations
-  // Common patterns: adText, adBody, body, text, description, snapshot.body
-  const adCopy = item.ad_copy 
+  // Priority: snapshot.cards[0].body (actual body) > snapshot.body.text (may be template variable)
+  const adCopy = (item.snapshot?.cards && Array.isArray(item.snapshot.cards) && item.snapshot.cards.length > 0 && item.snapshot.cards[0]?.body)
+    || (item.ad_snapshot_data?.snapshot?.cards && Array.isArray(item.ad_snapshot_data.snapshot.cards) && item.ad_snapshot_data.snapshot.cards.length > 0 && item.ad_snapshot_data.snapshot.cards[0]?.body)
+    || item.ad_copy 
     || item.body 
     || item.text 
     || item.description
@@ -145,7 +149,7 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || item.ad_snapshot_data?.snapshot?.text
     || item.ad_snapshot_data?.snapshot?.adBody
     || item.ad_snapshot_data?.snapshot?.adText
-    || item.snapshot?.body
+    || (item.snapshot?.body && typeof item.snapshot.body === 'string' ? item.snapshot.body : item.snapshot?.body?.text)
     || item.snapshot?.text
     || item.snapshot?.adBody
     || item.snapshot?.adText
@@ -173,6 +177,9 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     for (const cards of cardsArrays) {
       if (Array.isArray(cards)) {
         for (const card of cards) {
+          // Check resized_image_url first (better quality), then original_image_url
+          if (card?.resized_image_url) { thumbnail = card.resized_image_url; break; }
+          if (card?.original_image_url) { thumbnail = card.original_image_url; break; }
           if (card?.image_url) { thumbnail = card.image_url; break; }
           if (card?.imageUrl) { thumbnail = card.imageUrl; break; }
           if (card?.thumbnail_url) { thumbnail = card.thumbnail_url; break; }
@@ -188,10 +195,21 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     }
   }
 
+  // Extract reach from various possible locations
+  // Priority: aaa_info.eu_total_reach > transparency_by_location.eu_transparency.eu_total_reach > reach_estimate
+  const reach = item.aaa_info?.eu_total_reach
+    || item.transparency_by_location?.eu_transparency?.eu_total_reach
+    || item.reach_estimate
+    || item.reach
+    || item.reachLower
+    || item.reachUpper
+    || item.impressions
+    || 0;
+
   return {
     id: item.ad_archive_id || item.id || item.adId || String(item.ad_snapshot_url || Math.random()),
     page_name: item.page_name || item.pageName || item.page_name || 'Unknown',
-    reach: parseInt(item.reach || item.reachLower || item.reachUpper || item.impressions || '0', 10) || 0,
+    reach: parseInt(String(reach || '0'), 10) || 0,
     video_url: extractVideoUrl(item),
     thumbnail_url: thumbnail,
     heading: heading,
