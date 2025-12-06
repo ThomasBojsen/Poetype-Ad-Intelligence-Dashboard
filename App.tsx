@@ -19,6 +19,7 @@ const App: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [brandsRefreshTrigger, setBrandsRefreshTrigger] = useState<number>(0);
   
   // Scrape Logic States
   const [isScrapeModalOpen, setIsScrapeModalOpen] = useState(false);
@@ -90,6 +91,8 @@ const App: React.FC = () => {
     
     const success = await triggerScrapeWorkflow(urls, sessionId);
     if (success) {
+      // Refresh brands list after adding new brands
+      setBrandsRefreshTrigger(prev => prev + 1);
       setIsScraping(true);
       setScrapeTimeLeft(SCRAPE_WAIT_TIME_SECONDS);
     } else {
@@ -224,7 +227,11 @@ const App: React.FC = () => {
         setFilters={setFilters}
         maxReachAvailable={rawData.length > 0 ? Math.max(...rawData.map(d => d.reach)) : 100000}
         sessionId={sessionId}
-        onBrandDeleted={() => loadData(true)}
+        onBrandDeleted={() => {
+          loadData(true);
+          setBrandsRefreshTrigger(prev => prev + 1);
+        }}
+        refreshTrigger={brandsRefreshTrigger}
       />
 
       {/* Main Content */}
