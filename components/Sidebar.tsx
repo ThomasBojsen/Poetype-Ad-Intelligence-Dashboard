@@ -176,17 +176,15 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
             <h3 className="text-xs font-semibold tracking-wide uppercase">Filter by Brand</h3>
           </div>
           <div className="space-y-4">
-            {loadingBrands ? (
-              <p className="text-sm text-stone-400">Loading brands...</p>
-            ) : brands.filter(b => b.is_active).length === 0 ? (
+            {allBrands.length === 0 ? (
               <p className="text-sm text-stone-400">No brands available</p>
             ) : (
-              brands.filter(b => b.is_active).map(brand => (
-                <label key={brand.id} className="flex items-center group cursor-pointer">
+              allBrands.map(brand => (
+                <label key={brand} className="flex items-center group cursor-pointer">
                   <input 
                     type="checkbox" 
-                    checked={filters.selectedBrands.includes(brand.name)}
-                    onChange={() => handleBrandToggle(brand.name)}
+                    checked={filters.selectedBrands.includes(brand)}
+                    onChange={() => handleBrandToggle(brand)}
                     className="peer sr-only"
                   />
                   <div className="w-5 h-5 border rounded bg-white peer-checked:bg-[#D6453D] peer-checked:border-[#D6453D] peer-focus:ring-2 peer-focus:ring-[#D6453D]/20 transition-all flex items-center justify-center border-stone-300">
@@ -194,7 +192,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
                       <path d="M20 6 9 17l-5-5"></path>
                     </svg>
                   </div>
-                  <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">{brand.name}</span>
+                  <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">{brand}</span>
                 </label>
               ))
             )}
