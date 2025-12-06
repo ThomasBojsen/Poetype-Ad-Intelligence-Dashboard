@@ -29,89 +29,88 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
   };
 
   return (
-    <aside className="w-full md:w-72 bg-white border-r border-[#F3DED7] h-screen sticky top-0 overflow-y-auto flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-      {/* Brand Logo Section */}
-      <div className="p-8 border-b border-[#F3DED7]">
-        <div className="flex items-center gap-1 mb-1">
-          <span className="text-[#D94E41] text-2xl tracking-wide font-[Roboto_Slab] font-bold">POETYPE</span>
-          <div className="w-2 h-2 bg-[#D94E41] mt-2"></div> {/* The square dot from logo */}
+    <aside className="w-80 flex flex-col border-r bg-white hidden md:flex h-full flex-shrink-0 border-[#EADFD8] animate-sidebar">
+      {/* Logo Area */}
+      <div className="p-8 border-b border-[#F5EBE6]">
+        <div className="flex items-center gap-1 mb-2">
+          <h1 className="text-2xl font-bold tracking-tight text-[#D6453D]">POETYPE</h1>
+          <div className="w-1.5 h-1.5 bg-[#D6453D] mt-1"></div>
         </div>
-        <p className="text-[10px] text-[#8B8680] uppercase tracking-widest font-bold pl-1">Ad Intelligence Dashboard</p>
+        <p className="text-xs font-medium tracking-wider uppercase text-stone-400">Ad Intelligence Dashboard</p>
       </div>
 
-      <div className="p-8 space-y-10 flex-1">
+      {/* Filters */}
+      <div className="flex-1 overflow-y-auto p-8 space-y-10">
+        
         {/* Brand Filter */}
         <div>
-          <div className="flex items-center gap-2 mb-5 text-[#111827]">
-            <Filter size={16} className="text-[#D94E41]" />
-            <h3 className="font-bold text-sm uppercase tracking-wider">Filter by Brand</h3>
+          <div className="flex items-center gap-2 mb-5 text-stone-500">
+            <Filter size={16} strokeWidth={1.5} />
+            <h3 className="text-xs font-semibold tracking-wide uppercase">Filter by Brand</h3>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {allBrands.map(brand => (
-              <label key={brand} className="flex items-center space-x-3 cursor-pointer group">
-                <div className="relative flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={filters.selectedBrands.includes(brand)}
-                    onChange={() => handleBrandToggle(brand)}
-                    className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-gray-300 transition-all checked:border-[#D94E41] checked:bg-[#D94E41]"
-                  />
-                  <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
+              <label key={brand} className="flex items-center group cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={filters.selectedBrands.includes(brand)}
+                  onChange={() => handleBrandToggle(brand)}
+                  className="peer sr-only"
+                />
+                <div className="w-5 h-5 border rounded bg-white peer-checked:bg-[#D6453D] peer-checked:border-[#D6453D] peer-focus:ring-2 peer-focus:ring-[#D6453D]/20 transition-all flex items-center justify-center border-stone-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
                 </div>
-                <span className={`text-sm transition-colors ${filters.selectedBrands.includes(brand) ? 'text-[#111827] font-semibold' : 'text-[#57534E] group-hover:text-[#D94E41]'}`}>
-                    {brand}
-                </span>
+                <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">{brand}</span>
               </label>
             ))}
           </div>
         </div>
 
-        {/* Reach Slider */}
+        {/* Range Filter */}
         <div>
-          <h3 className="font-bold text-sm uppercase tracking-wider text-[#111827] mb-5">Reach Range</h3>
+          <h3 className="text-xs font-semibold tracking-wide uppercase mb-6 text-stone-500">Reach Range</h3>
+          
           <div className="space-y-6">
-            <div>
-              <div className="flex justify-between text-xs text-[#57534E] mb-2">
-                <span>Min Reach</span>
-                <span className="font-mono font-bold text-[#D94E41]">{filters.minReach.toLocaleString()}</span>
+            <div className="relative">
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm text-stone-500">Min Reach</label>
+                <span className="text-sm font-semibold text-[#D6453D]">{filters.minReach.toLocaleString()}</span>
               </div>
-              <input
-                type="range"
-                min="0"
-                max={maxReachAvailable}
+              <input 
+                type="range" 
+                min="0" 
+                max={maxReachAvailable} 
                 value={filters.minReach}
                 onChange={(e) => handleReachChange(e, 'min')}
-                className="w-full h-1.5 bg-[#F3DED7] rounded-lg appearance-none cursor-pointer accent-[#D94E41]"
               />
             </div>
-            <div>
-              <div className="flex justify-between text-xs text-[#57534E] mb-2">
-                <span>Max Reach</span>
-                <span className="font-mono font-bold text-[#D94E41]">{filters.maxReach.toLocaleString()}</span>
+
+            <div className="relative">
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm text-stone-500">Max Reach</label>
+                <span className="text-sm font-semibold text-[#D6453D]">{filters.maxReach.toLocaleString()}</span>
               </div>
-              <input
-                type="range"
-                min="0"
-                max={maxReachAvailable}
+              <input 
+                type="range" 
+                min="0" 
+                max={maxReachAvailable} 
                 value={filters.maxReach}
                 onChange={(e) => handleReachChange(e, 'max')}
-                className="w-full h-1.5 bg-[#F3DED7] rounded-lg appearance-none cursor-pointer accent-[#D94E41]"
               />
             </div>
           </div>
         </div>
       </div>
-      
-      <div className="p-6 bg-[#FFF8F4] border-t border-[#F3DED7]">
+
+      {/* Footer Action */}
+      <div className="p-8 border-t border-[#F5EBE6] bg-[#FFF8F5]">
         <button 
-            onClick={() => setFilters({ selectedBrands: [], minReach: 0, maxReach: maxReachAvailable })}
-            className="w-full py-3 text-sm text-[#57534E] hover:text-[#D94E41] hover:bg-[#FCDCD8] rounded-lg transition-colors font-bold uppercase tracking-wide"
+          onClick={() => setFilters({ selectedBrands: [], minReach: 0, maxReach: maxReachAvailable })}
+          className="w-full py-3 text-sm font-medium hover:text-[#D6453D] hover:bg-[#FFF2EB] rounded-lg transition-colors duration-200 text-stone-500"
         >
-            Reset All Filters
+          Reset All Filters
         </button>
       </div>
     </aside>

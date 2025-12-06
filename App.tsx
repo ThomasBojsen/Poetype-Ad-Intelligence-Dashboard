@@ -5,7 +5,7 @@ import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
 import { fetchAdData, triggerScrapeWorkflow, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
-import { LayoutGrid, Target, Zap, PlusCircle } from 'lucide-react';
+import { LayoutGrid, Target, Zap, Trophy, RefreshCw } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';
 
@@ -166,7 +166,7 @@ const App: React.FC = () => {
   const totalReach = filteredData.reduce((sum, item) => sum + item.reach, 0);
 
   return (
-    <div className="flex min-h-screen bg-[#FFF8F4] text-slate-900 font-sans relative">
+    <div className="flex h-screen overflow-hidden text-stone-900 selection:bg-[#D6453D]/20 selection:text-[#D6453D]">
       
       {/* Progress Modal (Popup instead of Full Screen) */}
       <ProgressModal 
@@ -191,89 +191,91 @@ const App: React.FC = () => {
       />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header */}
-        <header className="bg-[#FFF8F4] border-b border-[#F3DED7] px-8 py-6 flex justify-between items-center sticky top-0 z-10">
-          <div>
-             <h1 className="text-3xl font-bold text-[#111827] flex items-center gap-2 tracking-tight">
-                🏆 Top Performing Video Ads
-             </h1>
-             <p className="text-[#57534E] mt-2 text-sm font-medium">
-               Live insight in the best performing ads
-             </p>
-          </div>
+      <main className="flex-1 overflow-y-auto bg-[#FFF2EB]">
+        <div className="max-w-7xl mx-auto px-8 py-10">
           
-          <button 
-            onClick={() => setIsScrapeModalOpen(true)}
-            className="bg-[#111827] text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-[#2D3748] transition-colors shadow-lg flex items-center gap-2"
-          >
-            <PlusCircle size={18} className="text-[#D94E41]" />
-            Update Data
-          </button>
-        </header>
-
-        {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-            
-          {/* KPI Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-[#F3DED7] flex items-center gap-5">
-                <div className="p-3 bg-[#FFF8F4] text-[#D94E41] rounded-lg">
-                    <LayoutGrid size={26} />
+          {/* Header */}
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 animate-reveal" style={{ animationDelay: '100ms' }}>
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="text-[#D6453D]">
+                  <Trophy size={28} strokeWidth={1.5} />
                 </div>
-                <div>
-                    <p className="text-xs text-[#8B8680] uppercase tracking-wider font-semibold">Active Ads</p>
-                    <p className="text-3xl font-bold text-[#111827] mt-1">{totalAds}</p>
-                </div>
+                <h2 className="text-3xl font-semibold tracking-tight text-[#0B1221]">Top Performing Video Ads</h2>
+              </div>
+              <p className="text-lg pl-10 text-stone-500 font-medium">Live insight in the best performing ads</p>
             </div>
             
-            <div className="bg-white p-6 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-[#F3DED7] flex items-center gap-5">
-                <div className="p-3 bg-[#FFF8F4] text-[#111827] rounded-lg">
-                    <Target size={26} />
-                </div>
-                <div>
-                    <p className="text-xs text-[#8B8680] uppercase tracking-wider font-semibold">Total Reach</p>
-                    <p className="text-3xl font-bold text-[#111827] mt-1">{totalReach.toLocaleString()}</p>
-                </div>
+            <button 
+              onClick={() => setIsScrapeModalOpen(true)}
+              className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ring-1 ring-white/10 bg-[#0B1221] hover:bg-stone-800"
+            >
+              <RefreshCw size={16} strokeWidth={1.5} />
+              Update Data
+            </button>
+          </header>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 animate-reveal" style={{ animationDelay: '200ms' }}>
+            {/* Stat Card 1 */}
+            <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-5 border-[#EADFD8]">
+              <div className="w-14 h-14 rounded-xl bg-[#FFF2EB] flex items-center justify-center text-[#D6453D] flex-shrink-0">
+                <LayoutGrid size={28} strokeWidth={1.5} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-1 text-stone-400">Active Ads</p>
+                <p className="text-4xl font-semibold tracking-tight text-[#0B1221]">{totalAds}</p>
+              </div>
             </div>
 
-            <div className="bg-[#D94E41] p-6 rounded-xl shadow-lg border border-[#D94E41] flex items-center gap-5 lg:col-span-2 text-white relative overflow-hidden">
-                {/* Decorative circle */}
-                <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-                
-                <div className="p-3 bg-white/20 rounded-lg text-white z-10">
-                    <Zap size={26} />
-                </div>
-                <div className="z-10">
-                    <p className="text-xs text-orange-100 uppercase tracking-wider font-semibold">Poetype Tip</p>
-                    <p className="text-lg font-medium mt-1 leading-snug">The only real insight is datadriven.</p>
-                </div>
+            {/* Stat Card 2 */}
+            <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-5 border-[#EADFD8]">
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-stone-50 text-stone-600">
+                <Target size={28} strokeWidth={1.5} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-1 text-stone-400">Total Reach</p>
+                <p className="text-4xl font-semibold tracking-tight text-[#0B1221]">{totalReach.toLocaleString()}</p>
+              </div>
+            </div>
+
+            {/* Stat Card 3 (Tip) */}
+            <div className="bg-[#D6453D] p-6 rounded-2xl border border-[#D6453D] shadow-[0_8px_30px_rgb(214,69,61,0.12)] flex items-center gap-5 text-white">
+              <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-white flex-shrink-0 backdrop-blur-sm">
+                <Zap size={28} strokeWidth={1.5} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-white/80 mb-1">Poetype Tip</p>
+                <p className="text-lg font-medium leading-tight">The only real insight is datadriven.</p>
+              </div>
             </div>
           </div>
 
           {/* Loading State */}
           {loading ? (
-             <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#D94E41]"></div>
-             </div>
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#D6453D]"></div>
+            </div>
           ) : filteredData.length === 0 ? (
             /* Empty State */
-             <div className="flex flex-col items-center justify-center h-80 text-gray-400 border-2 border-dashed border-[#E5E7EB] rounded-2xl bg-white/50">
-                <LayoutGrid size={48} className="mb-4 opacity-20 text-[#D94E41]" />
-                <p className="text-lg font-medium text-[#57534E]">No ads found matching your filters</p>
-                <button 
-                    onClick={() => setFilters(prev => ({ ...prev, selectedBrands: [], minReach: 0 }))}
-                    className="mt-4 text-[#D94E41] font-bold hover:underline cursor-pointer"
-                >
-                    Clear Filters
-                </button>
-             </div>
+            <div className="flex flex-col items-center justify-center h-80 text-stone-400 border-2 border-dashed border-[#EADFD8] rounded-2xl bg-white/50">
+              <LayoutGrid size={48} className="mb-4 opacity-20 text-[#D6453D]" />
+              <p className="text-lg font-medium text-stone-500">No ads found matching your filters</p>
+              <button 
+                onClick={() => setFilters(prev => ({ ...prev, selectedBrands: [], minReach: 0 }))}
+                className="mt-4 text-[#D6453D] font-bold hover:underline cursor-pointer"
+              >
+                Clear Filters
+              </button>
+            </div>
           ) : (
-             /* Video Grid */
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pb-10">
-                {filteredData.map((ad) => (
-                    <AdCard key={ad.id} data={ad} />
-                ))}
+            /* Video Grid */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {filteredData.map((ad, index) => (
+                <div key={ad.id} className="animate-reveal" style={{ animationDelay: `${300 + index * 100}ms` }}>
+                  <AdCard data={ad} />
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -9,21 +9,87 @@
     <style>
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #FFF8F4; /* Poetype Cream */
+        background-color: #FFF2EB;
       }
-      /* Custom Scrollbar for cleaner look */
-      ::-webkit-scrollbar {
-        width: 8px;
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { 
+        width: 6px; 
+        height: 6px; 
       }
-      ::-webkit-scrollbar-track {
-        background: #FFF8F4; 
+      ::-webkit-scrollbar-track { 
+        background: transparent; 
       }
-      ::-webkit-scrollbar-thumb {
-        background: #E5E7EB; 
-        border-radius: 4px;
+      ::-webkit-scrollbar-thumb { 
+        background: #EADFD8; 
+        border-radius: 3px; 
       }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #D1D5DB; 
+      ::-webkit-scrollbar-thumb:hover { 
+        background: #D6CCC5; 
+      }
+      
+      /* Custom Range Slider Styling */
+      input[type=range] {
+        -webkit-appearance: none; 
+        width: 100%; 
+        background: transparent;
+      }
+      input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid #EADFD8;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        cursor: pointer;
+        margin-top: -6px; 
+      }
+      input[type=range]::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 4px;
+        cursor: pointer;
+        background: #EADFD8;
+        border-radius: 2px;
+      }
+      input[type=range]:focus::-webkit-slider-thumb {
+        border-color: #D6453D;
+        box-shadow: 0 0 0 2px rgba(214, 69, 61, 0.1);
+      }
+
+      /* Animation Keyframes - Tom Ford Style Smooth Reveal */
+      @keyframes revealFlow {
+        0% {
+          opacity: 0;
+          transform: translateY(80px) scale(0.98);
+          filter: blur(10px);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+          filter: blur(0);
+        }
+      }
+
+      @keyframes sidebarFade {
+        0% { 
+          opacity: 0; 
+          transform: translateX(-20px); 
+        }
+        100% { 
+          opacity: 1; 
+          transform: translateX(0); 
+        }
+      }
+
+      .animate-reveal {
+        opacity: 0;
+        animation: revealFlow 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        will-change: transform, opacity, filter;
+      }
+
+      .animate-sidebar {
+        opacity: 0;
+        animation: sidebarFade 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
     </style>
   <script type="importmap">

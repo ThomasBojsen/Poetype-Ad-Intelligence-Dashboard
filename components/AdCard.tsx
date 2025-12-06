@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AdData } from '../types';
-import { ExternalLink, Eye, MessageSquareText, VideoOff } from 'lucide-react';
+import { ExternalLink, Eye, MessageSquareText, VideoOff, Play } from 'lucide-react';
 
 interface AdCardProps {
   data: AdData;
@@ -10,78 +10,83 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [videoError, setVideoError] = useState(false);
 
+  const reachDisplay = data.reach >= 1000 ? `${(data.reach / 1000).toFixed(1)}k` : data.reach.toString();
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-[#F3DED7] overflow-hidden hover:shadow-lg hover:border-[#D94E41]/30 transition-all duration-300 flex flex-col group">
+    <div className="bg-white rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group border-[#EADFD8]">
       {/* Video/Thumbnail Section */}
-      <div className="relative aspect-video bg-[#111827] flex items-center justify-center overflow-hidden">
+      <div className="relative aspect-video overflow-hidden bg-stone-100">
         {data.video_url && !videoError ? (
           <video 
             src={data.video_url}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
             controls
             onError={() => setVideoError(true)}
             poster={data.thumbnail} 
           />
         ) : data.thumbnail ? (
-           // Fallback to just showing the thumbnail if no video or video error
-           <img 
-             src={data.thumbnail} 
-             alt="Ad Thumbnail" 
-             className="w-full h-full object-cover opacity-90"
-           />
+          <img 
+            src={data.thumbnail} 
+            alt="Ad Thumbnail" 
+            className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
+          />
         ) : (
-          <div className="flex flex-col items-center text-[#8B8680] p-4 text-center">
+          <div className="flex flex-col items-center justify-center h-full text-stone-400 p-4 text-center">
             <VideoOff className="mb-2 opacity-50" size={32} />
             <span className="text-sm font-medium">No video available</span>
           </div>
         )}
         
-        <div className="absolute top-3 right-3 bg-[#111827]/90 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded font-medium flex items-center gap-1.5 border border-white/10 shadow-sm z-10">
-          <Eye size={14} className="text-[#D94E41]" />
-          {data.reach >= 1000 ? `${(data.reach / 1000).toFixed(1)}k` : data.reach}
+        {/* Play Button Overlay */}
+        <div className="absolute inset-0 bg-black/10 flex items-center justify-center group-hover:bg-black/20 transition-colors">
+          <div className="flex group-hover:scale-110 transition-transform text-white bg-black/30 w-14 h-14 border-white/20 border rounded-full backdrop-blur-sm items-center justify-center">
+            <Play size={24} strokeWidth={1.5} className="fill-current ml-1" />
+          </div>
+        </div>
+        
+        {/* Reach Badge */}
+        <div className="absolute top-3 right-3 backdrop-blur text-white text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-white/10 shadow-sm bg-[#0B1221]/80">
+          <Eye size={14} strokeWidth={1.5} />
+          {reachDisplay}
         </div>
       </div>
 
       {/* Content Body */}
-      <div className="p-6 flex flex-col flex-1">
-        <div className="flex justify-between items-start mb-3">
-          <span className="inline-block px-3 py-1 rounded text-xs font-bold uppercase tracking-wide bg-[#FFF8F4] text-[#D94E41] border border-[#F3DED7]">
-            {data.page_name}
-          </span>
+      <div className="p-6">
+        <div className="inline-block bg-[#FFF2EB] border border-[#F5E6DE] text-[#D6453D] text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3 tracking-wide uppercase">
+          {data.page_name}
         </div>
-
-        <h3 className="font-bold text-[#111827] text-lg leading-tight mb-5 line-clamp-2 min-h-[3.5rem]">
-            {data.heading || "No Heading"}
+        
+        <h3 className="text-lg font-semibold mb-6 truncate text-[#0B1221]">
+          {data.heading || "No Heading"}
         </h3>
 
         {/* Expandable Section */}
-        <div className="mt-auto">
-            <div className={`bg-[#FFF8F4] rounded-lg border border-[#F3DED7] overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[600px] mb-4' : 'max-h-0 opacity-0'}`}>
-                <div className="p-5 text-sm text-[#57534E]">
-                    <p className="font-bold text-[#111827] mb-2 uppercase text-xs tracking-wider">Ad Copy</p>
-                    <p className="italic leading-relaxed whitespace-pre-wrap">{data.ad_copy}</p>
-                </div>
-            </div>
+        <div className={`bg-[#FFF2EB] rounded-lg border border-[#F5E6DE] overflow-hidden transition-all duration-300 ease-in-out mb-4 ${isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
+          <div className="p-5 text-sm text-stone-600">
+            <p className="font-semibold text-[#0B1221] mb-2 uppercase text-xs tracking-wider">Ad Copy</p>
+            <p className="leading-relaxed whitespace-pre-wrap">{data.ad_copy}</p>
+          </div>
+        </div>
 
-            <div className="flex gap-3">
-                <button 
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="flex-1 py-2.5 px-4 border-2 border-[#F3DED7] rounded-lg text-sm font-bold text-[#111827] hover:border-[#111827] hover:bg-white transition-all flex items-center justify-center gap-2"
-                >
-                    <MessageSquareText size={16} className={isExpanded ? "text-[#D94E41]" : "text-[#8B8680]"} />
-                    {isExpanded ? 'Hide Details' : 'View Copy'}
-                </button>
-                
-                <a 
-                    href={data.ad_library_url} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex-1 py-2.5 px-4 bg-[#D94E41] rounded-lg text-sm font-bold text-white hover:bg-[#B9382C] transition-colors flex items-center justify-center gap-2 shadow-sm"
-                >
-                    <span>Ad Library</span>
-                    <ExternalLink size={16} />
-                </a>
-            </div>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex-1 flex items-center justify-center gap-2 border py-2.5 px-4 rounded-full text-sm font-medium transition-colors border-[#EADFD8] hover:bg-[#FFF8F5] text-stone-600 hover:text-[#D6453D]"
+          >
+            <MessageSquareText size={16} strokeWidth={1.5} className="opacity-50" />
+            View Copy
+          </button>
+          
+          <a 
+            href={data.ad_library_url} 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex-1 flex items-center justify-center gap-2 bg-[#D6453D] hover:bg-[#C03E36] text-white py-2.5 px-4 rounded-full text-sm font-medium transition-all shadow-md shadow-[#D6453D]/20"
+          >
+            Ad Library
+            <ExternalLink size={16} strokeWidth={1.5} className="opacity-80" />
+          </a>
         </div>
       </div>
     </div>
