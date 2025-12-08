@@ -86,7 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
     if (!sessionId) return;
     
     // Confirm deletion
-    if (!confirm('Are you sure you want to remove this brand? This will hide its ads from future scrapes.')) {
+    if (!confirm('Er du sikker på, at du vil fjerne dette brand? Dette vil skjule dets annoncer fra fremtidige skrapninger.')) {
       return;
     }
 
@@ -101,11 +101,11 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
           onBrandDeleted();
         }
       } else {
-        alert('Failed to delete brand. Please try again.');
+        alert('Kunne ikke slette brand. Prøv igen.');
       }
     } catch (error) {
       console.error('Error deleting brand:', error);
-      alert('Failed to delete brand. Please try again.');
+      alert('Kunne ikke slette brand. Prøv igen.');
     } finally {
       setDeletingId(null);
     }
@@ -142,12 +142,12 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
         <div>
           <div className="flex items-center gap-2 mb-5 text-stone-500">
             <Filter size={16} strokeWidth={1.5} />
-            <h3 className="text-xs font-semibold tracking-wide uppercase">Manage Brands</h3>
+            <h3 className="text-xs font-semibold tracking-wide uppercase">Administrer Brands</h3>
           </div>
           {loadingBrands ? (
-            <p className="text-sm text-stone-400">Loading brands...</p>
+            <p className="text-sm text-stone-400">Henter brands...</p>
           ) : brands.length === 0 ? (
-            <p className="text-sm text-stone-400">No brands added yet. Use "Update Data" to add brands.</p>
+            <p className="text-sm text-stone-400">Ingen brands tilføjet endnu. Brug "Tilføj Brands" for at tilføje.</p>
           ) : (
             <div className="space-y-2">
               {brands.filter(b => b.is_active).map(brand => {
@@ -165,7 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
                       onClick={() => handleDeleteBrand(brand.id)}
                       disabled={deletingId === brand.id}
                       className="ml-2 p-1.5 text-stone-400 hover:text-[#D6453D] hover:bg-[#FFF2EB] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Delete brand"
+                      title="Slet brand"
                     >
                       {deletingId === brand.id ? (
                         <X size={14} className="animate-spin" />
@@ -184,11 +184,11 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
         <div>
           <div className="flex items-center gap-2 mb-5 text-stone-500">
             <Filter size={16} strokeWidth={1.5} />
-            <h3 className="text-xs font-semibold tracking-wide uppercase">Filter by Brand</h3>
+            <h3 className="text-xs font-semibold tracking-wide uppercase">Filtrer efter Brand</h3>
           </div>
           <div className="space-y-4">
             {allBrands.length === 0 ? (
-              <p className="text-sm text-stone-400">No brands available</p>
+              <p className="text-sm text-stone-400">Ingen brands tilgængelige</p>
             ) : (
               allBrands.map(brand => (
                 <label key={brand} className="flex items-center group cursor-pointer">
@@ -214,7 +214,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
         <div>
           <div className="flex items-center gap-2 mb-5 text-stone-500">
             <Filter size={16} strokeWidth={1.5} />
-            <h3 className="text-xs font-semibold tracking-wide uppercase">Media Type</h3>
+            <h3 className="text-xs font-semibold tracking-wide uppercase">Medietype</h3>
           </div>
           <div className="space-y-3">
             <label className="flex items-center group cursor-pointer">
@@ -229,7 +229,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
               <div className="w-5 h-5 border rounded-full bg-white peer-checked:bg-[#D6453D] peer-checked:border-[#D6453D] peer-focus:ring-2 peer-focus:ring-[#D6453D]/20 transition-all flex items-center justify-center border-stone-300">
                 <div className="w-2 h-2 rounded-full bg-white opacity-0 peer-checked:opacity-100"></div>
               </div>
-              <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">All Media</span>
+              <span className="ml-3 text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">Alle Medier</span>
             </label>
             
             <label className="flex items-center group cursor-pointer">
@@ -246,7 +246,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
               </div>
               <div className="ml-3 flex items-center gap-2">
                 <Video size={16} strokeWidth={1.5} className="text-stone-400" />
-                <span className="text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">Videos</span>
+                <span className="text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">Videoer</span>
               </div>
             </label>
             
@@ -264,7 +264,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
               </div>
               <div className="ml-3 flex items-center gap-2">
                 <Image size={16} strokeWidth={1.5} className="text-stone-400" />
-                <span className="text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">Images</span>
+                <span className="text-base font-medium transition-colors text-stone-600 group-hover:text-stone-900">Billeder</span>
               </div>
             </label>
           </div>
@@ -272,13 +272,13 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
 
         {/* Range Filter */}
         <div>
-          <h3 className="text-xs font-semibold tracking-wide uppercase mb-6 text-stone-500">Reach Range</h3>
+          <h3 className="text-xs font-semibold tracking-wide uppercase mb-6 text-stone-500">Reach</h3>
           
           <div className="space-y-6">
             <div className="relative">
               <div className="flex justify-between items-center mb-2">
                 <label className="text-sm text-stone-500">Min Reach</label>
-                <span className="text-sm font-semibold text-[#D6453D]">{filters.minReach.toLocaleString()}</span>
+                <span className="text-sm font-semibold text-[#D6453D]">{filters.minReach.toLocaleString('da-DK')}</span>
               </div>
               <input 
                 type="range" 
@@ -291,8 +291,8 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
 
             <div className="relative">
               <div className="flex justify-between items-center mb-2">
-                <label className="text-sm text-stone-500">Max Reach</label>
-                <span className="text-sm font-semibold text-[#D6453D]">{filters.maxReach.toLocaleString()}</span>
+                <label className="text-sm text-stone-500">Maks Reach</label>
+                <span className="text-sm font-semibold text-[#D6453D]">{filters.maxReach.toLocaleString('da-DK')}</span>
               </div>
               <input 
                 type="range" 
@@ -312,7 +312,7 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
           onClick={() => setFilters({ selectedBrands: [], minReach: 0, maxReach: maxReachAvailable, mediaType: 'all' })}
           className="w-full py-3 text-sm font-medium hover:text-[#D6453D] hover:bg-[#FFF2EB] rounded-lg transition-colors duration-200 text-stone-500"
         >
-          Reset All Filters
+          Nulstil Alle Filtre
         </button>
       </div>
     </aside>

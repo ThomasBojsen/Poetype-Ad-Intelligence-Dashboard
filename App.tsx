@@ -4,14 +4,29 @@ import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
-import { fetchAdData, triggerScrapeWorkflow, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
-import { LayoutGrid, Target, Zap, Trophy, RefreshCw } from 'lucide-react';
+import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
+import { LayoutGrid, Target, Trophy, RefreshCw } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';
 
 const generateSessionId = (): string => {
   return `${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
 };
+
+// Poetype "P" Logo Component
+const PoetypeP: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 90 113" 
+    className={className}
+    style={{ enableBackground: 'new 0 0 90 113' }}
+  >
+    {/* Light part (Shadow/Extrusion) */}
+    <path fill="#FF9073" d="M54.5,73.9h-13v12.6h17.9v16.2H7V86.5h9.7V32.3H8.2V16.1h47.6c19.7,0,29.6,12.8,29.6,29.5C85.5,63.7,73.8,73.9,54.5,73.9z M49.1,32.3h-7.7v26.3h7.7c7.4,0,12.5-4.7,12.5-13.2C61.6,37.1,56.8,32.3,49.1,32.3z"/>
+    {/* Dark part (Face) */}
+    <path fill="#D33600" d="M47.5,73.9H34.4v12.6h17.9v16.2H0V86.5h9.7V32.3H1.2V16.1h47.6c19.7,0,29.6,12.8,29.6,29.5C78.5,63.7,66.8,73.9,47.5,73.9z M42.1,32.3h-7.7v26.3h7.7c7.4,0,12.5-4.7,12.5-13.2C54.6,37.1,49.8,32.3,42.1,32.3z"/>
+  </svg>
+);
 
 const App: React.FC = () => {
   const [rawData, setRawData] = useState<AdData[]>([]);
@@ -50,13 +65,9 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const loadData = useCallback(async (showRefreshing = false) => {
+  const loadData = useCallback(async () => {
     if (!sessionId) return;
-    if (showRefreshing) {
-      setIsRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+    setLoading(true);
     
     try {
       const result = await fetchAdData(true, sessionId);
@@ -75,7 +86,6 @@ const App: React.FC = () => {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
-      setIsRefreshing(false);
     }
   }, [sessionId]);
 
@@ -86,7 +96,7 @@ const App: React.FC = () => {
 
   const handleStartScrape = async (urls: string[]) => {
     if (!sessionId) {
-      alert("Session is not ready yet. Please retry in a moment.");
+      alert("Sessionen er ikke klar endnu. Prøv igen om et øjeblik.");
       return;
     }
     setIsScrapeModalOpen(false);
@@ -102,13 +112,29 @@ const App: React.FC = () => {
       setIsScraping(true);
       setScrapeTimeLeft(SCRAPE_WAIT_TIME_SECONDS);
     } else {
-      alert("Failed to start scrape process. Check configuration.");
+      alert("Kunne ikke starte indsamlingsprocessen. Tjek konfigurationen.");
     }
   };
 
-  // Continuous countdown + polling while scraping
+  const handleForceRefresh = async () => {
+    if (!sessionId) return;
+    
+    setIsRefreshing(true);
+    // Store current start time to compare against lastUpdated from API
+    setScrapeStartTime(new Date());
+    
+    const success = await refreshSessionScrape(sessionId);
+    if (!success) {
+      alert("Kunne ikke opdatere data. Prøv igen.");
+      setIsRefreshing(false);
+    }
+    // If success, the unified polling effect will take over
+  };
+
+  // Unified Polling Engine: Handles both "Modal Scrape" and "Button Refresh"
+  // It waits for new data to arrive from Apify -> Webhook -> DB
   useEffect(() => {
-    if (!isScraping || !sessionId) return;
+    if ((!isScraping && !isRefreshing) || !sessionId) return;
 
     let countdownTimer: ReturnType<typeof setInterval> | undefined;
     let pollTimer: ReturnType<typeof setInterval> | undefined;
@@ -135,19 +161,37 @@ const App: React.FC = () => {
         const data = Array.isArray(result) ? result : result.ads;
         const updated = Array.isArray(result) ? null : result.lastUpdated;
         
-        // Check if we have new data (either more ads or newer timestamp)
-        const hasNewData = data.length > dataCountAtScrapeStart || 
-          (updated && scrapeStartTime && new Date(updated) > scrapeStartTime);
+        // Determine if we have fresh data
+        // Condition 1: More ads than we started with (Modal Flow often adds items)
+        // Condition 2: The "lastUpdated" timestamp is newer than when we hit the button
+        let hasNewData = false;
+        
+        if (data.length > dataCountAtScrapeStart) {
+          hasNewData = true;
+        }
+        
+        if (updated && scrapeStartTime) {
+          const updatedTime = new Date(updated).getTime();
+          const startTime = scrapeStartTime.getTime();
+          if (updatedTime > startTime) {
+            hasNewData = true;
+          }
+        }
         
         if (hasNewData && data.length > 0) {
           applyFetchedData(result);
           console.log("New data detected! Stopping polling.");
+          
+          // Reset both loading states
           setIsScraping(false);
-        } else if (data.length > 0) {
-          // Update data even if it's not "new" (to keep it fresh), but continue polling
-          applyFetchedData(result);
-          console.log("Data exists but waiting for new scrape to complete...");
+          setIsRefreshing(false);
+        } else {
+          // Continue polling...
+          console.log("Polling... waiting for new scrape data.");
+          // Optionally update data in background if user wants to see partial updates? 
+          // For now, let's keep old data until scrape finishes to avoid UI jumpiness
         }
+
       } catch (error) {
         console.error("Polling failed", error);
       }
@@ -158,35 +202,38 @@ const App: React.FC = () => {
       pollTimer = setInterval(checkData, intervalMs);
     };
 
-    // Initial poll cadence: every 30 seconds
-    startPolling(30000);
-    checkData(); // Fire an immediate check once scraping starts
+    // Initial poll cadence: every 10 seconds for faster feedback
+    startPolling(10000);
+    
+    // Also update countdown only if we are in "Modal Mode" (isScraping)
+    if (isScraping) {
+      countdownTimer = setInterval(() => {
+        setScrapeTimeLeft(prev => {
+          const next = prev - 1;
 
-    countdownTimer = setInterval(() => {
-      setScrapeTimeLeft(prev => {
-        const next = prev - 1;
+          if (!hasSwitchedToFastPolling && next <= 0) {
+            hasSwitchedToFastPolling = true;
+            // Switch to fast polling (5s) if we are overtime
+            startPolling(5000); 
+          }
 
-        if (!hasSwitchedToFastPolling && next <= 0) {
-          hasSwitchedToFastPolling = true;
-          startPolling(15000); // Faster polling once we hit overtime
-        }
+          if (next <= -180) { // 3 minutes overtime
+            alert("Data er forsinket af Google. Opdater venligst siden om et par minutter.");
+            setIsScraping(false);
+            return -180;
+          }
 
-        if (next <= -180) {
-          alert("Data is delayed by Google. Please refresh the page in a few minutes.");
-          setIsScraping(false);
-          return -180;
-        }
-
-        return next;
-      });
-    }, 1000);
+          return next;
+        });
+      }, 1000);
+    }
 
     return () => {
       cancelled = true;
       if (countdownTimer) clearInterval(countdownTimer);
       if (pollTimer) clearInterval(pollTimer);
     };
-  }, [isScraping, sessionId]);
+  }, [isScraping, isRefreshing, sessionId, scrapeStartTime, dataCountAtScrapeStart]);
 
   // Derived State: Unique Brands
   const allBrands = useMemo(() => {
@@ -220,9 +267,9 @@ const App: React.FC = () => {
   const totalReach = filteredData.reduce((sum, item) => sum + item.reach, 0);
 
   return (
-    <div className="flex h-screen overflow-hidden text-stone-900 selection:bg-[#D6453D]/20 selection:text-[#D6453D]">
+    <div className="flex h-screen overflow-hidden text-stone-900">
       
-      {/* Progress Modal (Popup instead of Full Screen) */}
+      {/* Progress Modal (Popup instead of Full Screen) - Only show for Flow A */}
       <ProgressModal 
         isOpen={isScraping} 
         timeLeft={scrapeTimeLeft} 
@@ -244,7 +291,7 @@ const App: React.FC = () => {
         maxReachAvailable={rawData.length > 0 ? Math.max(...rawData.map(d => d.reach)) : 100000}
         sessionId={sessionId}
         onBrandDeleted={() => {
-          loadData(true);
+          loadData();
           setBrandsRefreshTrigger(prev => prev + 1);
         }}
         refreshTrigger={brandsRefreshTrigger}
@@ -262,31 +309,32 @@ const App: React.FC = () => {
                 <div className="text-[#D6453D]">
                   <Trophy size={28} strokeWidth={1.5} />
                 </div>
-                <h2 className="text-3xl font-semibold tracking-tight text-[#0B1221]">Top Performing Video Ads</h2>
+                <h2 className="text-3xl font-semibold tracking-tight text-[#0B1221]">Top Præsterende Annoncer</h2>
               </div>
-              <p className="text-lg pl-10 text-stone-500 font-medium">Live insight in the best performing ads</p>
+              <p className="text-lg pl-10 text-stone-500 font-medium">Live indsigt i de bedst præsterende annoncer</p>
               {lastUpdated && (
                 <p className="text-sm pl-10 text-stone-400 mt-1">
-                  Last updated: {new Date(lastUpdated).toLocaleString()}
+                  Sidst opdateret: {new Date(lastUpdated).toLocaleString('da-DK')}
                 </p>
               )}
             </div>
             
             <div className="flex items-center gap-3">
               <button 
-                onClick={() => loadData(true)}
-                disabled={isRefreshing}
+                onClick={handleForceRefresh}
+                disabled={isRefreshing || isScraping}
                 className="inline-flex items-center gap-2 text-stone-600 px-4 py-2.5 rounded-full text-sm font-medium transition-all border border-[#EADFD8] bg-white hover:bg-[#FFF8F5] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <RefreshCw size={16} strokeWidth={1.5} className={isRefreshing ? 'animate-spin' : ''} />
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                {isRefreshing ? 'Opdaterer...' : 'Opdater'}
               </button>
               <button 
                 onClick={() => setIsScrapeModalOpen(true)}
-                className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ring-1 ring-white/10 bg-[#0B1221] hover:bg-stone-800"
+                disabled={isRefreshing || isScraping}
+                className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ring-1 ring-white/10 bg-[#0B1221] hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <RefreshCw size={16} strokeWidth={1.5} />
-                Update Data
+                Tilføj Brands
               </button>
             </div>
           </header>
@@ -294,35 +342,45 @@ const App: React.FC = () => {
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 animate-reveal" style={{ animationDelay: '200ms' }}>
             {/* Stat Card 1 */}
-            <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-5 border-[#EADFD8]">
+            <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-5 border-[#EADFD8] min-w-0">
               <div className="w-14 h-14 rounded-xl bg-[#FFF2EB] flex items-center justify-center text-[#D6453D] flex-shrink-0">
                 <LayoutGrid size={28} strokeWidth={1.5} />
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-1 text-stone-400">Active Ads</p>
-                <p className="text-4xl font-semibold tracking-tight text-[#0B1221]">{totalAds}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider mb-1 text-stone-400 truncate">Aktive Annoncer</p>
+                <p className="text-2xl lg:text-3xl xl:text-4xl font-semibold tracking-tight text-[#0B1221] truncate">{totalAds}</p>
               </div>
             </div>
 
             {/* Stat Card 2 */}
-            <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-5 border-[#EADFD8]">
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-stone-50 text-stone-600">
+            <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-5 border-[#EADFD8] min-w-0">
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-[#FFF2EB] text-[#D6453D]">
                 <Target size={28} strokeWidth={1.5} />
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-1 text-stone-400">Total Reach</p>
-                <p className="text-4xl font-semibold tracking-tight text-[#0B1221]">{totalReach.toLocaleString()}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider mb-1 text-stone-400 truncate">Total Reach</p>
+                <p className="text-2xl lg:text-3xl xl:text-4xl font-semibold tracking-tight text-[#0B1221] truncate">{totalReach.toLocaleString('da-DK')}</p>
               </div>
             </div>
 
             {/* Stat Card 3 (Tip) */}
-            <div className="bg-[#D6453D] p-6 rounded-2xl border border-[#D6453D] shadow-[0_8px_30px_rgb(214,69,61,0.12)] flex items-center gap-5 text-white">
-              <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-white flex-shrink-0 backdrop-blur-sm">
-                <Zap size={28} strokeWidth={1.5} />
+            <div className="bg-[#D6453D] p-6 rounded-2xl border border-[#D6453D] shadow-[0_8px_30px_rgb(214,69,61,0.12)] flex items-center gap-5 text-white min-w-0">
+              <div className="w-14 h-14 rounded-xl bg-[#FFF2EB] flex items-center justify-center flex-shrink-0 p-3">
+                <PoetypeP className="w-full h-full" />
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-white/80 mb-1">Poetype Tip</p>
-                <p className="text-lg font-medium leading-tight">The only real insight is datadriven.</p>
+              <div className="grid grid-cols-2 gap-2 flex-1 min-w-0">
+                <div className="bg-white/20 rounded-lg px-2 py-1.5 text-center text-[10px] xl:text-xs font-bold tracking-wide shadow-sm backdrop-blur-sm border border-white/10 truncate">
+                  Ærlighed
+                </div>
+                <div className="bg-white/20 rounded-lg px-2 py-1.5 text-center text-[10px] xl:text-xs font-bold tracking-wide shadow-sm backdrop-blur-sm border border-white/10 truncate">
+                  Now
+                </div>
+                <div className="bg-white/20 rounded-lg px-2 py-1.5 text-center text-[10px] xl:text-xs font-bold tracking-wide shadow-sm backdrop-blur-sm border border-white/10 truncate">
+                  Proaktivitet
+                </div>
+                <div className="bg-white/20 rounded-lg px-2 py-1.5 text-center text-[10px] xl:text-xs font-bold tracking-wide shadow-sm backdrop-blur-sm border border-white/10 truncate">
+                  Øjenhøjde
+                </div>
               </div>
             </div>
           </div>
@@ -339,7 +397,7 @@ const App: React.FC = () => {
                 <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-2xl border border-[#EADFD8] flex items-center justify-center z-10">
                   <div className="flex flex-col items-center gap-3">
                     <RefreshCw size={24} strokeWidth={1.5} className="animate-spin text-[#D6453D]" />
-                    <p className="text-sm font-medium text-stone-600">Refreshing data...</p>
+                    <p className="text-sm font-medium text-stone-600">Tjekker for nye data...</p>
                   </div>
                 </div>
               )}
@@ -348,12 +406,12 @@ const App: React.FC = () => {
                 /* Empty State */
                 <div className="flex flex-col items-center justify-center h-80 text-stone-400 border-2 border-dashed border-[#EADFD8] rounded-2xl bg-white/50">
                   <LayoutGrid size={48} className="mb-4 opacity-20 text-[#D6453D]" />
-                  <p className="text-lg font-medium text-stone-500">No ads found matching your filters</p>
+                  <p className="text-lg font-medium text-stone-500">Ingen annoncer fundet med dine filtre</p>
                   <button 
                     onClick={() => setFilters(prev => ({ ...prev, selectedBrands: [], minReach: 0, mediaType: 'all' }))}
                     className="mt-4 text-[#D6453D] font-bold hover:underline cursor-pointer"
                   >
-                    Clear Filters
+                    Ryd Filtre
                   </button>
                 </div>
               ) : (

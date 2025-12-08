@@ -16,12 +16,12 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ isOpen }) => {
         
         <Loader2 size={48} className="animate-spin text-[#D6453D] mx-auto mb-6" />
         
-        <h2 className="text-2xl font-bold text-[#0B1221] mb-2">Updating Intelligence</h2>
+        <h2 className="text-2xl font-bold text-[#0B1221] mb-2">Opdaterer Indsigter</h2>
         <p className="text-stone-500 mb-4 text-sm leading-relaxed">
-          Hang tight—your ads are being fetched from Meta. This usually takes a moment.
+          Vent venligst – dine annoncer bliver hentet fra Meta. Dette tager normalt et øjeblik.
         </p>
         <p className="text-sm font-semibold text-[#D6453D] uppercase tracking-wide">
-          Please wait...
+          Vent venligst...
         </p>
       </div>
     </div>

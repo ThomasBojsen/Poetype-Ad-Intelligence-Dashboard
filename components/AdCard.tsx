@@ -93,7 +93,7 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-stone-400 p-4 text-center">
             <VideoOff className="mb-2 opacity-50" size={32} />
-            <span className="text-sm font-medium">No video available</span>
+            <span className="text-sm font-medium">Ingen video tilgængelig</span>
           </div>
         )}
         
@@ -135,13 +135,13 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
         </div>
         
         <h3 className="text-lg font-semibold mb-6 truncate text-[#0B1221]">
-          {data.heading || "No Heading"}
+          {data.heading || "Ingen Overskrift"}
         </h3>
 
         {/* Expandable Section */}
         <div className={`bg-[#FFF2EB] rounded-lg border border-[#F5E6DE] overflow-hidden transition-all duration-300 ease-in-out mb-4 ${isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
           <div className="p-5 text-sm text-stone-600">
-            <p className="font-semibold text-[#0B1221] mb-2 uppercase text-xs tracking-wider">Ad Copy</p>
+            <p className="font-semibold text-[#0B1221] mb-2 uppercase text-xs tracking-wider">Annoncetekst</p>
             <p className="leading-relaxed whitespace-pre-wrap">{data.ad_copy}</p>
           </div>
         </div>
@@ -152,7 +152,7 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
             className="flex-1 flex items-center justify-center gap-2 border py-2.5 px-4 rounded-full text-sm font-medium transition-colors border-[#EADFD8] hover:bg-[#FFF8F5] text-stone-600 hover:text-[#D6453D]"
           >
             <MessageSquareText size={16} strokeWidth={1.5} className="opacity-50" />
-            View Copy
+            Se Tekst
           </button>
           
           <a 
@@ -161,7 +161,7 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
             rel="noreferrer"
             className="flex-1 flex items-center justify-center gap-2 bg-[#D6453D] hover:bg-[#C03E36] text-white py-2.5 px-4 rounded-full text-sm font-medium transition-all shadow-md shadow-[#D6453D]/20"
           >
-            Ad Library
+            Annoncebibliotek
             <ExternalLink size={16} strokeWidth={1.5} className="opacity-80" />
           </a>
         </div>

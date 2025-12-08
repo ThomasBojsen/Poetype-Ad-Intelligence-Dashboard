@@ -55,7 +55,7 @@ const ScrapeModal: React.FC<ScrapeModalProps> = ({ isOpen, onClose, onStartScrap
             <div className="bg-[#D6453D]/10 p-2 rounded-md">
               <UploadCloud className="text-[#D6453D]" size={20} />
             </div>
-            <h2 className="text-lg font-bold text-[#0B1221]">Add New Competitors</h2>
+            <h2 className="text-lg font-bold text-[#0B1221]">Tilføj Nye Konkurrenter</h2>
           </div>
           <button onClick={onClose} className="text-stone-500 hover:text-[#0B1221] transition-colors">
             <X size={20} />
@@ -65,7 +65,7 @@ const ScrapeModal: React.FC<ScrapeModalProps> = ({ isOpen, onClose, onStartScrap
         {/* Body - Scrollable */}
         <div className="p-6 overflow-y-auto custom-scrollbar">
           <p className="text-sm text-stone-500 mb-4">
-            Enter Facebook Ad Library links (or Page URLs) below. We will scrape new data and update the dashboard automatically.
+            Indtast Facebook Annoncebibliotek links (eller Side URL'er) nedenfor. Vi indhenter nye data og opdaterer dashboardet automatisk.
           </p>
 
           <div className="space-y-3">
@@ -90,7 +90,7 @@ const ScrapeModal: React.FC<ScrapeModalProps> = ({ isOpen, onClose, onStartScrap
                   <button 
                     onClick={() => removeField(index)}
                     className="p-3 text-stone-400 hover:text-[#D6453D] hover:bg-[#FFF8F5] rounded-lg transition-colors"
-                    title="Remove link"
+                    title="Fjern link"
                   >
                     <Trash2 size={18} />
                   </button>
@@ -104,7 +104,7 @@ const ScrapeModal: React.FC<ScrapeModalProps> = ({ isOpen, onClose, onStartScrap
             className="mt-4 flex items-center gap-2 text-sm font-bold text-[#D6453D] hover:text-[#C03E36] transition-colors px-2 py-1 rounded-md hover:bg-[#FFF8F5]"
           >
             <Plus size={18} />
-            Add another link
+            Tilføj endnu et link
           </button>
         </div>
 
@@ -114,14 +114,14 @@ const ScrapeModal: React.FC<ScrapeModalProps> = ({ isOpen, onClose, onStartScrap
             onClick={onClose}
             className="px-4 py-2 text-sm font-semibold text-stone-500 hover:bg-[#FFF2EB] rounded-lg transition-colors"
           >
-            Cancel
+            Annuller
           </button>
           <button 
             onClick={handleSubmit}
             disabled={!hasValidUrl}
             className="px-4 py-2 text-sm font-bold text-white bg-[#D6453D] hover:bg-[#C03E36] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center gap-2"
           >
-            Start Scraping
+            Start Indsamling
           </button>
         </div>
       </div>

@@ -139,6 +139,35 @@ export const triggerScrapeWorkflow = async (urls: string[], sessionId: string): 
 };
 
 /**
+ * Trigger a refresh scrape for existing brands in the session
+ * Does NOT add new brands, just triggers scrape for existing ones
+ */
+export const refreshSessionScrape = async (sessionId: string): Promise<boolean> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/trigger-scrape`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Failed to trigger refresh scrape:", error);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log("Refresh scrape triggered successfully:", result);
+    return true;
+  } catch (error) {
+    console.error("Failed to trigger refresh scrape", error);
+    return false;
+  }
+};
+
+/**
  * Fetch brands for a session
  */
 export const fetchBrands = async (sessionId: string): Promise<{ id: number | string; name: string; ad_library_url: string; is_active: boolean }[]> => {
@@ -193,6 +222,3 @@ export const deleteBrand = async (sessionId: string, brandId: number | string): 
     return false;
   }
 };
-
-// CSV parsing and video URL cleaning functions removed - no longer needed
-// Data now comes directly from the API
