@@ -107,7 +107,8 @@ const App: React.FC = () => {
     
     const success = await triggerScrapeWorkflow(urls, sessionId);
     if (success) {
-      // Refresh brands list after adding new brands
+      // triggerScrapeWorkflow already waits for all brands to be added via Promise.allSettled
+      // The database write should be complete by now, so refresh immediately
       setBrandsRefreshTrigger(prev => prev + 1);
       setIsScraping(true);
       setScrapeTimeLeft(SCRAPE_WAIT_TIME_SECONDS);
