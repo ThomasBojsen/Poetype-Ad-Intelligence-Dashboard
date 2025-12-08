@@ -81,13 +81,23 @@ export default async function handler(
     const enhancedAds = (ads || []).map(ad => {
       let days_active = 1; // Default to 1 to avoid division by zero
       
-      if (ad.first_seen) {
-        const firstSeenDate = new Date(ad.first_seen);
-        const diffTime = now.getTime() - firstSeenDate.getTime();
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        
-        // If difference is less than 1 day, default to 1
-        days_active = diffDays < 1 ? 1 : diffDays;
+      // Try multiple possible field names for the start date
+      const startDate = ad.first_seen || ad.start_date_formatted || ad.start_date || ad.started_running;
+      
+      if (startDate) {
+        try {
+          const firstSeenDate = new Date(startDate);
+          // Check if date is valid
+          if (!isNaN(firstSeenDate.getTime())) {
+            const diffTime = now.getTime() - firstSeenDate.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            // If difference is less than 1 day, default to 1
+            days_active = diffDays < 1 ? 1 : diffDays;
+          }
+        } catch (error) {
+          console.warn(`Invalid date format for ad ${ad.id}:`, startDate);
+        }
       }
       
       // Calculate viral score (reach per day)

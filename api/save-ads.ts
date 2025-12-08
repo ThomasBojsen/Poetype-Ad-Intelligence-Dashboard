@@ -220,7 +220,7 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     heading: heading,
     ad_copy: adCopy,
     ad_library_url: adLibraryUrl,
-    first_seen: item.first_seen || item.firstSeen || item.started_running || null,
+    first_seen: item.first_seen || item.firstSeen || item.started_running || item.start_date_formatted || item.start_date || null,
     last_seen: new Date().toISOString(),
   };
 }
