@@ -100,6 +100,8 @@ export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string
       thumbnail: ad.thumbnail_url || '',
       heading: ad.heading || '',
       ad_copy: ad.ad_copy || '',
+      days_active: ad.days_active,
+      viral_score: ad.viral_score,
     }));
 
     // Return ads with lastUpdated timestamp
