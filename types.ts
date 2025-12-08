@@ -7,6 +7,8 @@ export interface AdData {
   thumbnail: string;
   heading: string;
   ad_copy: string;
+  days_active?: number;
+  viral_score?: number; // Reach per day
 }
 
 export interface FilterState {

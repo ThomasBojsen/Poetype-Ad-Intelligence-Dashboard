@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { AdData } from '../types';
-import { ExternalLink, Eye, MessageSquareText, VideoOff, Play, Pause } from 'lucide-react';
+import { ExternalLink, Eye, MessageSquareText, VideoOff, Play, Pause, TrendingUp } from 'lucide-react';
 
 interface AdCardProps {
   data: AdData;
@@ -123,8 +123,17 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
 
       {/* Content Body */}
       <div className="p-6">
-        <div className="inline-block bg-[#FFF2EB] border border-[#F5E6DE] text-[#D6453D] text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3 tracking-wide uppercase">
-          {data.page_name}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <div className="inline-block bg-[#FFF2EB] border border-[#F5E6DE] text-[#D6453D] text-[11px] font-semibold px-2.5 py-1 rounded-full tracking-wide uppercase">
+            {data.page_name}
+          </div>
+          {data.viral_score !== undefined && (
+            <div className="inline-flex items-center gap-1.5 bg-[#0B1221] border border-white/20 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm">
+              <TrendingUp size={12} strokeWidth={2.5} className="text-white" />
+              <span className="tracking-tight">{data.viral_score.toLocaleString('da-DK')}</span>
+              <span className="text-[10px] font-semibold opacity-80">/dag</span>
+            </div>
+          )}
         </div>
         
         <h3 className="text-lg font-semibold mb-6 truncate text-[#0B1221]">

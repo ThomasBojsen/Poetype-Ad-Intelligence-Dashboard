@@ -16,13 +16,54 @@ const MOCK_DATA: AdData[] = [
     thumbnail: 'https://picsum.photos/600/340',
     heading: 'Get Glowing Skin in 7 Days',
     ad_copy: "Stop masking your skin problems. Solve them. Our new Vitamin C serum is clinically proven to brighten skin tone.",
+    days_active: 5,
+    viral_score: 30000,
+  },
+  {
+    id: '2',
+    page_name: 'TechFlow',
+    reach: 250000,
+    ad_library_url: '#',
+    video_url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    thumbnail: 'https://picsum.photos/600/340?random=2',
+    heading: 'Revolutionize Your Workflow',
+    ad_copy: "Experience the future of productivity with our cutting-edge software solution. Join thousands of satisfied customers.",
+    days_active: 12,
+    viral_score: 20833,
+  },
+  {
+    id: '3',
+    page_name: 'EcoFresh',
+    reach: 85000,
+    ad_library_url: '#',
+    video_url: '',
+    thumbnail: 'https://picsum.photos/600/340?random=3',
+    heading: 'Sustainable Living Starts Here',
+    ad_copy: "Make a difference with our eco-friendly products. Better for you, better for the planet.",
+    days_active: 3,
+    viral_score: 28333,
   },
 ];
 
+// Check if we're in development mode
+const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+
 export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string): Promise<{ ads: AdData[], lastUpdated: string | null } | AdData[]> => {
+  // In development mode, always use mock data
+  if (isDevelopment) {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return {
+      ads: MOCK_DATA,
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+
   if (!useRealUrl) {
     await new Promise(resolve => setTimeout(resolve, 800));
-    return MOCK_DATA;
+    return {
+      ads: MOCK_DATA,
+      lastUpdated: new Date().toISOString(),
+    };
   }
 
   if (!sessionId) {

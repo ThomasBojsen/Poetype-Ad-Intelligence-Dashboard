@@ -76,10 +76,34 @@ export default async function handler(
       lastUpdated = timestamps[0] || null;
     }
 
+    // Calculate days_active and viral_score for each ad
+    const now = new Date();
+    const enhancedAds = (ads || []).map(ad => {
+      let days_active = 1; // Default to 1 to avoid division by zero
+      
+      if (ad.first_seen) {
+        const firstSeenDate = new Date(ad.first_seen);
+        const diffTime = now.getTime() - firstSeenDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        // If difference is less than 1 day, default to 1
+        days_active = diffDays < 1 ? 1 : diffDays;
+      }
+      
+      // Calculate viral score (reach per day)
+      const viral_score = Math.round(ad.reach / days_active);
+      
+      return {
+        ...ad,
+        days_active,
+        viral_score,
+      };
+    });
+
     return res.status(200).json({
       success: true,
-      ads: ads || [],
-      count: ads?.length || 0,
+      ads: enhancedAds,
+      count: enhancedAds.length,
       lastUpdated: lastUpdated,
     });
   } catch (error: any) {
