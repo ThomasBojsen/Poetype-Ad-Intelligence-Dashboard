@@ -5,7 +5,7 @@ import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
 import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
-import { LayoutGrid, Target, Trophy, RefreshCw } from 'lucide-react';
+import { LayoutGrid, Target, Trophy, RefreshCw, Eye } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';
 
@@ -354,8 +354,8 @@ const App: React.FC = () => {
 
             {/* Stat Card 2 */}
             <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-5 border-[#EADFD8] min-w-0">
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-[#FFF2EB] text-[#D6453D]">
-                <Target size={28} strokeWidth={1.5} />
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-[#0B1221] text-white">
+                <Eye size={28} strokeWidth={1.5} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold uppercase tracking-wider mb-1 text-stone-400 truncate">Total Reach</p>
