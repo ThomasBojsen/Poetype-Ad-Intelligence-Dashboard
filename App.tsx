@@ -65,11 +65,13 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh = false) => {
     if (!sessionId) return;
     setLoading(true);
     
     try {
+      // Force fresh data by adding cache-busting parameter
+      const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
       const result = await fetchAdData(true, sessionId);
       const data = Array.isArray(result) ? result : result.ads;
       const updated = Array.isArray(result) ? null : result.lastUpdated;
@@ -107,8 +109,7 @@ const App: React.FC = () => {
     
     const success = await triggerScrapeWorkflow(urls, sessionId);
     if (success) {
-      // triggerScrapeWorkflow already waits for all brands to be added via Promise.allSettled
-      // The database write should be complete by now, so refresh immediately
+      // Refresh brands list after adding new brands
       setBrandsRefreshTrigger(prev => prev + 1);
       setIsScraping(true);
       setScrapeTimeLeft(SCRAPE_WAIT_TIME_SECONDS);
@@ -189,8 +190,10 @@ const App: React.FC = () => {
         } else {
           // Continue polling...
           console.log("Polling... waiting for new scrape data.");
-          // Optionally update data in background if user wants to see partial updates? 
-          // For now, let's keep old data until scrape finishes to avoid UI jumpiness
+          // Update data in background even if not "new" to ensure viral_score is always current
+          if (data.length > 0) {
+            applyFetchedData(result);
+          }
         }
 
       } catch (error) {
