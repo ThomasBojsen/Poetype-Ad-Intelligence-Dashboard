@@ -211,6 +211,28 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || item.impressions
     || 0;
 
+  // Normalize date format - convert "YYYY-MM-DD HH:MM:SS" to ISO format if needed
+  const rawFirstSeen = item.first_seen || item.firstSeen || item.started_running || item.start_date_formatted || item.start_date || null;
+  let first_seen = null;
+  if (rawFirstSeen) {
+    try {
+      let dateString = String(rawFirstSeen);
+      // Convert "YYYY-MM-DD HH:MM:SS" to ISO format "YYYY-MM-DDTHH:MM:SS"
+      if (dateString.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+        dateString = dateString.replace(' ', 'T');
+      }
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        first_seen = date.toISOString();
+      }
+    } catch (error) {
+      console.warn(`Error parsing first_seen date:`, rawFirstSeen, error);
+    }
+  }
+
+  // Save start_date_formatted as-is from Apify (for calculation purposes)
+  const start_date_formatted = item.start_date_formatted || item.start_date || null;
+
   return {
     id: item.ad_archive_id || item.id || item.adId || String(item.ad_snapshot_url || Math.random()),
     page_name: item.page_name || item.pageName || item.page_name || 'Unknown',
@@ -220,7 +242,8 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     heading: heading,
     ad_copy: adCopy,
     ad_library_url: adLibraryUrl,
-    first_seen: item.first_seen || item.firstSeen || item.started_running || item.start_date_formatted || item.start_date || null,
+    first_seen: first_seen,
+    start_date_formatted: start_date_formatted,
     last_seen: new Date().toISOString(),
   };
 }

@@ -81,12 +81,19 @@ export default async function handler(
     const enhancedAds = (ads || []).map(ad => {
       let days_active = 1; // Default to 1 to avoid division by zero
       
-      // Try multiple possible field names for the start date
-      const startDate = ad.first_seen || ad.start_date_formatted || ad.start_date || ad.started_running;
+      // Try multiple possible field names for the start date (prioritize start_date_formatted over first_seen)
+      const startDate = ad.start_date_formatted || ad.start_date || ad.started_running || ad.first_seen || ad.firstSeen;
       
       if (startDate) {
         try {
-          const firstSeenDate = new Date(startDate);
+          // Handle date format "2025-11-24 08:00:00" by replacing space with T for ISO format
+          let dateString = String(startDate);
+          // If it's in format "YYYY-MM-DD HH:MM:SS", convert to ISO format
+          if (dateString.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+            dateString = dateString.replace(' ', 'T');
+          }
+          
+          const firstSeenDate = new Date(dateString);
           // Check if date is valid
           if (!isNaN(firstSeenDate.getTime())) {
             const diffTime = now.getTime() - firstSeenDate.getTime();
@@ -94,9 +101,31 @@ export default async function handler(
             
             // If difference is less than 1 day, default to 1
             days_active = diffDays < 1 ? 1 : diffDays;
+            
+            // Debug logging for first ad to help troubleshoot
+            if (ads && ads.indexOf(ad) === 0) {
+              console.log('Date calculation debug:', {
+                ad_id: ad.id,
+                startDate: startDate,
+                dateString: dateString,
+                firstSeenDate: firstSeenDate.toISOString(),
+                now: now.toISOString(),
+                diffDays: diffDays,
+                days_active: days_active,
+                reach: ad.reach,
+                viral_score: Math.round(ad.reach / days_active)
+              });
+            }
+          } else {
+            console.warn(`Invalid date for ad ${ad.id}:`, startDate, '->', dateString);
           }
         } catch (error) {
-          console.warn(`Invalid date format for ad ${ad.id}:`, startDate);
+          console.warn(`Error parsing date for ad ${ad.id}:`, startDate, error);
+        }
+      } else {
+        // Log when no start date is found
+        if (ads && ads.indexOf(ad) === 0) {
+          console.warn(`No start date found for ad ${ad.id}. Available fields:`, Object.keys(ad));
         }
       }
       
