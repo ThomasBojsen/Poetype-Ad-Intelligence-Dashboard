@@ -22,7 +22,22 @@ const apifyClient = new ApifyClient({ token: apifyToken });
  * Handles fallback: cards[0].video_hd_url vs videos[0]
  */
 function extractVideoUrl(item: any): string {
-  // Try ad_snapshot_data.snapshot.cards first (most common structure)
+  // Try snapshot.cards first (primary structure based on Apify JSON)
+  if (item.snapshot?.cards && Array.isArray(item.snapshot.cards)) {
+    for (const card of item.snapshot.cards) {
+      if (card?.video_hd_url) return card.video_hd_url;
+      if (card?.video_url) return card.video_url;
+      if (card?.videoUrl) return card.videoUrl;
+      if (card?.video) {
+        if (typeof card.video === 'string') return card.video;
+        if (card.video?.url) return card.video.url;
+        if (card.video?.video_hd_url) return card.video.video_hd_url;
+        if (card.video?.video_url) return card.video.video_url;
+      }
+    }
+  }
+  
+  // Try ad_snapshot_data.snapshot.cards (alternative structure)
   if (item.ad_snapshot_data?.snapshot?.cards && Array.isArray(item.ad_snapshot_data.snapshot.cards)) {
     for (const card of item.ad_snapshot_data.snapshot.cards) {
       if (card?.video_hd_url) return card.video_hd_url;
@@ -62,19 +77,6 @@ function extractVideoUrl(item: any): string {
       if (card.video?.url) return card.video.url;
       if (card.video?.video_hd_url) return card.video.video_hd_url;
       if (card.video?.video_url) return card.video.video_url;
-    }
-  }
-  
-  // Try snapshot.cards
-  if (item.snapshot?.cards && Array.isArray(item.snapshot.cards)) {
-    for (const card of item.snapshot.cards) {
-      if (card?.video_hd_url) return card.video_hd_url;
-      if (card?.video_url) return card.video_url;
-      if (card?.videoUrl) return card.videoUrl;
-      if (card?.video) {
-        if (typeof card.video === 'string') return card.video;
-        if (card.video?.url) return card.video.url;
-      }
     }
   }
   
@@ -166,12 +168,13 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || '';
 
   // Try cards arrays (check all cards, not just first)
+  // Prioritize snapshot.cards first (primary structure based on Apify JSON)
   if (!thumbnail) {
     const cardsArrays = [
+      item.snapshot?.cards,
       item.ad_snapshot_data?.snapshot?.cards,
       item.cards,
       item.ad_snapshot_data?.cards,
-      item.snapshot?.cards,
     ].filter(Boolean);
 
     for (const cards of cardsArrays) {
@@ -234,10 +237,11 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
   const start_date_formatted = item.start_date_formatted || item.start_date || null;
 
   // Prioritize specific ad URL over generic brand URL
-  // 1. Check item.ad_snapshot_url (snake_case)
-  // 2. Check item.adSnapshotUrl (camelCase)
-  // 3. Fall back to generic adLibraryUrl
-  const ad_library_url = item.ad_snapshot_url 
+  // The specific link to the ad is located at the root: item.ad_library_url
+  // 1. Check item.ad_library_url (primary field from Apify JSON)
+  // 2. Check item.adSnapshotUrl (camelCase fallback)
+  // 3. Fall back to generic adLibraryUrl only if specific one is missing
+  const ad_library_url = item.ad_library_url 
     || item.adSnapshotUrl 
     || adLibraryUrl;
 
