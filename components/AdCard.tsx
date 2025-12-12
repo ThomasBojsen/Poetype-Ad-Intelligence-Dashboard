@@ -165,10 +165,14 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
           </button>
           
           {(() => {
-            // Use specific ad URL if available, otherwise fall back to brand's generic URL
-            const libraryUrl = (data.ad_library_url && typeof data.ad_library_url === 'string' && data.ad_library_url.trim() !== '')
+            // Prioritize ad_library_url if it exists and is not empty
+            // Only fall back to brand_ad_library_url if ad_library_url is missing/empty
+            const hasAdUrl = data.ad_library_url && typeof data.ad_library_url === 'string' && data.ad_library_url.trim() !== '';
+            const hasBrandUrl = data.brand_ad_library_url && typeof data.brand_ad_library_url === 'string' && data.brand_ad_library_url.trim() !== '';
+            
+            const libraryUrl = hasAdUrl
               ? data.ad_library_url
-              : (data.brand_ad_library_url && typeof data.brand_ad_library_url === 'string' && data.brand_ad_library_url.trim() !== '')
+              : hasBrandUrl
               ? data.brand_ad_library_url
               : null;
 
