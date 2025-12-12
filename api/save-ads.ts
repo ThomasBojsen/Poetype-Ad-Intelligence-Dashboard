@@ -417,8 +417,11 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
         .eq('id', ad.id)
         .single();
 
+      // Extract brand_ad_library_url before upsert (not in database schema)
+      const { brand_ad_library_url, ...adForDatabase } = ad;
+
       const upsertData = {
-        ...ad,
+        ...adForDatabase,
         // Preserve first_seen if ad already exists
         first_seen: existingAd?.first_seen || ad.first_seen || now,
         last_seen: now, // Always update last_seen
