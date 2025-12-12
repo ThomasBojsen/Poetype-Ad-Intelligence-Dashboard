@@ -236,6 +236,31 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
   // Save start_date_formatted as-is from Apify (for calculation purposes)
   const start_date_formatted = item.start_date_formatted || item.start_date || null;
 
+  // Determine ad_library_url: prioritize specific ad URL from Apify object over generic brand URL
+  // Explicitly check for non-empty strings (not just truthy values) to avoid empty string fallback
+  const ad_library_url = (item.ad_library_url && typeof item.ad_library_url === 'string' && item.ad_library_url.trim() !== '')
+    || (item.adSnapshotUrl && typeof item.adSnapshotUrl === 'string' && item.adSnapshotUrl.trim() !== '')
+    || adLibraryUrl;
+  
+  // Log which source was used (only for first item to avoid spam)
+  if (!mapApifyItemToAd._urlLogged) {
+    console.log('ad_library_url source:', {
+      item_ad_library_url: item.ad_library_url,
+      item_ad_library_url_type: typeof item.ad_library_url,
+      item_ad_library_url_length: item.ad_library_url?.length,
+      item_ad_library_url_trimmed: item.ad_library_url?.trim(),
+      item_adSnapshotUrl: item.adSnapshotUrl,
+      adLibraryUrl_argument: adLibraryUrl,
+      finalValue: ad_library_url,
+      source: (item.ad_library_url && typeof item.ad_library_url === 'string' && item.ad_library_url.trim() !== '') 
+        ? 'item.ad_library_url' 
+        : (item.adSnapshotUrl && typeof item.adSnapshotUrl === 'string' && item.adSnapshotUrl.trim() !== '')
+        ? 'item.adSnapshotUrl'
+        : 'adLibraryUrl (fallback)',
+    });
+    mapApifyItemToAd._urlLogged = true;
+  }
+
   return {
     id: item.ad_archive_id || item.id || item.adId || String(item.ad_snapshot_url || Math.random()),
     page_name: item.page_name || item.pageName || item.page_name || 'Unknown',
@@ -244,15 +269,16 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     thumbnail_url: thumbnail,
     heading: heading,
     ad_copy: adCopy,
-    ad_library_url: item.ad_library_url || item.adSnapshotUrl || adLibraryUrl,
+    ad_library_url: ad_library_url,
     first_seen: first_seen,
     start_date_formatted: start_date_formatted,
     last_seen: new Date().toISOString(),
   };
 }
 
-// Add flag to prevent logging every item
+// Add flags to prevent logging every item
 mapApifyItemToAd._logged = false;
+mapApifyItemToAd._urlLogged = false;
 
 export default async function handler(
   req: VercelRequest,
