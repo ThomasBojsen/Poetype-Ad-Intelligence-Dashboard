@@ -53,12 +53,39 @@ export default async function handler(
 
     const brandUrls = brands.map(b => b.ad_library_url);
 
-    // Step 2: Select ads where ad_library_url is in the list
-    const { data: ads, error: adsError } = await supabase
+    // Step 2: Fetch all ads and filter by matching brand URLs
+    // We can't use exact match on ad_library_url since it contains specific ad IDs
+    // Instead, we'll fetch ads and match them by checking if ad_library_url or brand_ad_library_url
+    // contains/equals any brand URL, or if we can extract page_id from brand URL
+    const { data: allAds, error: adsError } = await supabase
       .from('ads')
       .select('*')
-      .in('ad_library_url', brandUrls)
       .order('reach', { ascending: false });
+
+    if (adsError) {
+      console.error('Error fetching ads:', adsError);
+      return res.status(500).json({ error: 'Failed to fetch ads', details: adsError.message });
+    }
+
+    // Filter ads that match any brand URL
+    // Match if: ad_library_url contains brand URL, brand URL contains ad_library_url,
+    // or if we can extract page_id/view_all_page_id from brand URL and match
+    const ads = (allAds || []).filter(ad => {
+      const adUrl = ad.ad_library_url || '';
+      const brandAdUrl = ad.brand_ad_library_url || '';
+      
+      // Check if ad URL or brand URL matches any brand URL
+      return brandUrls.some(brandUrl => {
+        // Exact match
+        if (adUrl === brandUrl || brandAdUrl === brandUrl) return true;
+        // Contains match (for specific ad URLs that contain brand URL base)
+        if (adUrl.includes(brandUrl) || brandUrl.includes(adUrl)) return true;
+        // Extract page_id from brand URL and check if ad URL contains it
+        const pageIdMatch = brandUrl.match(/view_all_page_id=(\d+)/);
+        if (pageIdMatch && adUrl.includes(pageIdMatch[1])) return true;
+        return false;
+      });
+    });
 
     if (adsError) {
       console.error('Error fetching ads:', adsError);
