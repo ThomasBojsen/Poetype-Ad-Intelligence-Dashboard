@@ -164,30 +164,50 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
             Se Tekst
           </button>
           
-          {data.ad_library_url && typeof data.ad_library_url === 'string' && data.ad_library_url.trim() !== '' ? (
-            <a 
-              href={data.ad_library_url} 
-              target="_blank" 
-              rel="noreferrer noopener"
-              className="flex-1 flex items-center justify-center gap-2 bg-[#D6453D] hover:bg-[#C03E36] text-white py-2.5 px-4 rounded-full text-sm font-medium transition-all shadow-md shadow-[#D6453D]/20 cursor-pointer"
-            >
-              Annoncebibliotek
-              <ExternalLink size={16} strokeWidth={1.5} className="opacity-80" />
-            </a>
-          ) : (
-            <button 
-              disabled
-              className="flex-1 flex items-center justify-center gap-2 bg-stone-300 text-stone-500 py-2.5 px-4 rounded-full text-sm font-medium cursor-not-allowed"
-              title="Ad Library URL ikke tilgængelig"
-            >
-              Annoncebibliotek
-              <ExternalLink size={16} strokeWidth={1.5} className="opacity-50" />
-            </button>
-          )}
+          {(() => {
+            // Debug: log the ad_library_url value
+            if (data.id && !AdCard._logged) {
+              console.log('AdCard ad_library_url check:', {
+                id: data.id,
+                ad_library_url: data.ad_library_url,
+                type: typeof data.ad_library_url,
+                length: data.ad_library_url?.length,
+                trimmed: data.ad_library_url?.trim(),
+                isEmpty: !data.ad_library_url || data.ad_library_url.trim() === '',
+              });
+              AdCard._logged = true;
+            }
+            
+            const hasUrl = data.ad_library_url && typeof data.ad_library_url === 'string' && data.ad_library_url.trim() !== '';
+            
+            return hasUrl ? (
+              <a 
+                href={data.ad_library_url} 
+                target="_blank" 
+                rel="noreferrer noopener"
+                className="flex-1 flex items-center justify-center gap-2 bg-[#D6453D] hover:bg-[#C03E36] text-white py-2.5 px-4 rounded-full text-sm font-medium transition-all shadow-md shadow-[#D6453D]/20 cursor-pointer"
+              >
+                Annoncebibliotek
+                <ExternalLink size={16} strokeWidth={1.5} className="opacity-80" />
+              </a>
+            ) : (
+              <button 
+                disabled
+                className="flex-1 flex items-center justify-center gap-2 bg-stone-300 text-stone-500 py-2.5 px-4 rounded-full text-sm font-medium cursor-not-allowed"
+                title={`Ad Library URL ikke tilgængelig. Value: ${data.ad_library_url || 'null/undefined'}`}
+              >
+                Annoncebibliotek
+                <ExternalLink size={16} strokeWidth={1.5} className="opacity-50" />
+              </button>
+            );
+          })()}
         </div>
       </div>
     </div>
   );
 };
+
+// Add flag to prevent logging every card
+AdCard._logged = false;
 
 export default AdCard;

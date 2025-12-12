@@ -222,12 +222,8 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
 
   const start_date_formatted = item.start_date_formatted || item.start_date || null;
 
-  // Determine ad_library_url: prioritize specific ad URL from Apify object
-  // Only use brand URL as fallback if specific ad URL is completely missing (not just empty)
-  // This ensures we don't overwrite empty ad URLs with brand URLs
-  const ad_library_url = (item.ad_library_url && typeof item.ad_library_url === 'string' && item.ad_library_url.trim() !== '')
-    || (item.adSnapshotUrl && typeof item.adSnapshotUrl === 'string' && item.adSnapshotUrl.trim() !== '')
-    || (item.ad_library_url === undefined && item.adSnapshotUrl === undefined ? adLibraryUrl : '');
+  // Use ad_library_url directly from Apify object - no fallback, no matching
+  const ad_library_url = item.ad_library_url || item.adSnapshotUrl || '';
 
   // Get brand's generic URL from Apify object (item.url)
   const brand_ad_library_url = (item.url && typeof item.url === 'string' && item.url.trim() !== '')
