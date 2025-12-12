@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { AdData } from '../types';
-import { ExternalLink, Eye, MessageSquareText, VideoOff, Play, Pause, TrendingUp } from 'lucide-react';
+import { ExternalLink, Eye, MessageSquareText, VideoOff, Play, Pause, TrendingUp, Calendar } from 'lucide-react';
 
 interface AdCardProps {
   data: AdData;
@@ -132,6 +132,13 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
               <TrendingUp size={12} strokeWidth={2.5} className="text-white" />
               <span className="tracking-tight">{data.viral_score.toLocaleString('da-DK')}</span>
               <span className="text-[10px] font-semibold opacity-80">/dag</span>
+            </div>
+          )}
+          {data.days_active !== undefined && (
+            <div className="inline-flex items-center gap-1.5 bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm">
+              <Calendar size={12} strokeWidth={2.5} className="text-stone-700" />
+              <span className="tracking-tight">{data.days_active}</span>
+              <span className="text-[10px] font-semibold opacity-80">dage</span>
             </div>
           )}
         </div>

@@ -420,7 +420,7 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 /* Video Grid */
-                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 ${isRefreshing ? 'opacity-50' : ''}`}>
+                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-10 ${isRefreshing ? 'opacity-50' : ''}`}>
                   {filteredData.map((ad, index) => (
                     <div key={ad.id} className="animate-reveal" style={{ animationDelay: `${300 + index * 100}ms` }}>
                       <AdCard data={ad} />
