@@ -105,10 +105,12 @@ const AdCard: React.FC<AdCardProps> = ({ data }) => {
         {/* Pause Button Overlay - Show when playing */}
         {data.video_url && !videoError && isPlaying && (
           <div 
-            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
-            onClick={handlePlayPause}
+            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
           >
-            <div className="flex text-white bg-black/30 w-14 h-14 border-white/20 border rounded-full backdrop-blur-sm items-center justify-center">
+            <div 
+              className="flex text-white bg-black/30 w-14 h-14 border-white/20 border rounded-full backdrop-blur-sm items-center justify-center pointer-events-auto cursor-pointer"
+              onClick={handlePlayPause}
+            >
               <Pause size={24} strokeWidth={1.5} className="fill-current" />
             </div>
           </div>
