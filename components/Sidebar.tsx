@@ -47,7 +47,7 @@ interface SidebarProps {
   sessionId: string | null;
   onBrandDeleted?: () => void;
   refreshTrigger?: number; // Trigger refresh when this changes
-  rawData?: Array<{ page_name: string; ad_library_url: string }>; // Ads data to map brands to page names
+  rawData?: Array<{ page_name: string; ad_library_url: string; brand_ad_library_url?: string }>; // Ads data to map brands to page names
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxReachAvailable, sessionId, onBrandDeleted, refreshTrigger, rawData = [] }) => {
@@ -57,8 +57,8 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
 
   // Map brand URLs to page names from ads data
   const getPageNameForBrand = (adLibraryUrl: string): string => {
-    // Find the first ad with matching ad_library_url and return its page_name
-    const matchingAd = rawData.find(ad => ad.ad_library_url === adLibraryUrl);
+    // Find the first ad with matching brand_ad_library_url and return its page_name
+    const matchingAd = rawData.find(ad => ad.brand_ad_library_url === adLibraryUrl);
     return matchingAd?.page_name || '';
   };
 
