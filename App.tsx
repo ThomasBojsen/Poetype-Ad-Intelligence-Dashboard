@@ -4,7 +4,7 @@ import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
-import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
+import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, checkScrapeStatus, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
 import { LayoutGrid, Target, Trophy, RefreshCw, Eye } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';
@@ -42,6 +42,7 @@ const App: React.FC = () => {
   const [scrapeTimeLeft, setScrapeTimeLeft] = useState(0);
   const [scrapeStartTime, setScrapeStartTime] = useState<Date | null>(null);
   const [dataCountAtScrapeStart, setDataCountAtScrapeStart] = useState<number>(0);
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     selectedBrands: [],
@@ -107,8 +108,10 @@ const App: React.FC = () => {
     setDataCountAtScrapeStart(rawData.length);
     setScrapeStartTime(new Date());
     
-    const success = await triggerScrapeWorkflow(urls, sessionId);
-    if (success) {
+    const result = await triggerScrapeWorkflow(urls, sessionId);
+    if (result.success && result.runId) {
+      // Store the runId for polling
+      setCurrentRunId(result.runId);
       // Refresh brands list after adding new brands
       setBrandsRefreshTrigger(prev => prev + 1);
       setIsScraping(true);
@@ -125,89 +128,129 @@ const App: React.FC = () => {
     // Store current start time to compare against lastUpdated from API
     setScrapeStartTime(new Date());
     
-    const success = await refreshSessionScrape(sessionId);
-    if (!success) {
+    const result = await refreshSessionScrape(sessionId);
+    if (result.success && result.runId) {
+      // Store the runId for polling
+      setCurrentRunId(result.runId);
+    } else {
       alert("Kunne ikke opdatere data. Prøv igen.");
       setIsRefreshing(false);
     }
     // If success, the unified polling effect will take over
   };
 
-  // Unified Polling Engine: Handles both "Modal Scrape" and "Button Refresh"
-  // It waits for new data to arrive from Apify -> Webhook -> DB
+  // Active Polling Engine: Checks Apify run status directly
   useEffect(() => {
-    if ((!isScraping && !isRefreshing) || !sessionId) return;
+    if ((!isScraping && !isRefreshing) || !sessionId || !currentRunId) return;
 
     let countdownTimer: ReturnType<typeof setInterval> | undefined;
     let pollTimer: ReturnType<typeof setInterval> | undefined;
     let cancelled = false;
     let hasSwitchedToFastPolling = false;
 
-    const applyFetchedData = (result: any) => {
-      const data = Array.isArray(result) ? result : result.ads;
-      const updated = Array.isArray(result) ? null : result.lastUpdated;
+    const applyFetchedData = (ads: any[]) => {
+      // Calculate days_active and viral_score for each ad
+      const now = new Date();
+      const mappedAds = ads.map((ad: any) => {
+        let days_active = 1; // Default to 1 to avoid division by zero
+        
+        // Try multiple possible field names for the start date
+        const startDate = ad.start_date_formatted || ad.start_date || ad.started_running || ad.first_seen || ad.firstSeen;
+        
+        if (startDate) {
+          try {
+            let dateString = String(startDate);
+            // If it's in format "YYYY-MM-DD HH:MM:SS", convert to ISO format
+            if (dateString.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+              dateString = dateString.replace(' ', 'T');
+            }
+            
+            const firstSeenDate = new Date(dateString);
+            if (!isNaN(firstSeenDate.getTime())) {
+              const diffTime = now.getTime() - firstSeenDate.getTime();
+              const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+              days_active = diffDays < 1 ? 1 : diffDays;
+            }
+          } catch (error) {
+            console.warn(`Error parsing date for ad ${ad.id}:`, startDate, error);
+          }
+        }
+        
+        // Calculate viral score (reach per day)
+        const viral_score = Math.round(ad.reach / days_active);
+        
+        return {
+          id: ad.id,
+          page_name: ad.page_name,
+          reach: ad.reach,
+          ad_library_url: ad.ad_library_url,
+          video_url: ad.video_url || '',
+          thumbnail: ad.thumbnail_url || '',
+          heading: ad.heading || '',
+          ad_copy: ad.ad_copy || '',
+          days_active,
+          viral_score,
+        };
+      });
       
-      setRawData(data);
-      setLastUpdated(updated);
-      if (data.length > 0) {
-        const maxR = Math.max(...data.map(d => d.reach), 0);
+      setRawData(mappedAds);
+      setLastUpdated(new Date().toISOString());
+      if (mappedAds.length > 0) {
+        const maxR = Math.max(...mappedAds.map(d => d.reach), 0);
         setFilters(prev => ({ ...prev, maxReach: maxR }));
       }
       setLoading(false);
     };
 
-    const checkData = async () => {
-      if (cancelled) return;
+    const checkScrape = async () => {
+      if (cancelled || !currentRunId) return;
+      
       try {
-        const result = await fetchAdData(true, sessionId);
-        const data = Array.isArray(result) ? result : result.ads;
-        const updated = Array.isArray(result) ? null : result.lastUpdated;
+        const result = await checkScrapeStatus(currentRunId, sessionId);
         
-        // Determine if we have fresh data
-        // Condition 1: More ads than we started with (Modal Flow often adds items)
-        // Condition 2: The "lastUpdated" timestamp is newer than when we hit the button
-        let hasNewData = false;
-        
-        if (data.length > dataCountAtScrapeStart) {
-          hasNewData = true;
+        if (result.status === 'RUNNING') {
+          // Continue polling
+          console.log("Scrape still running...");
+          return;
         }
         
-        if (updated && scrapeStartTime) {
-          const updatedTime = new Date(updated).getTime();
-          const startTime = scrapeStartTime.getTime();
-          if (updatedTime > startTime) {
-            hasNewData = true;
-          }
-        }
-        
-        if (hasNewData && data.length > 0) {
-          applyFetchedData(result);
-          console.log("New data detected! Stopping polling.");
+        if (result.status === 'COMPLETED' && result.ads) {
+          // Scrape completed, update data
+          console.log(`Scrape completed! Received ${result.ads.length} ads.`);
+          applyFetchedData(result.ads);
           
-          // Reset both loading states
+          // Reset loading states
           setIsScraping(false);
           setIsRefreshing(false);
-        } else {
-          // Continue polling...
-          console.log("Polling... waiting for new scrape data.");
-          // Update data in background even if not "new" to ensure viral_score is always current
-          if (data.length > 0) {
-            applyFetchedData(result);
-          }
+          setCurrentRunId(null);
+          
+          // Show success message (you can replace with toast if you have one)
+          console.log("Scrape completed successfully!");
         }
-
+        
+        if (result.status === 'FAILED') {
+          // Scrape failed
+          console.error("Scrape failed:", result.message);
+          setIsScraping(false);
+          setIsRefreshing(false);
+          setCurrentRunId(null);
+          alert(result.message || "Indsamlingen fejlede. Prøv igen.");
+        }
+        
       } catch (error) {
-        console.error("Polling failed", error);
+        console.error("Error checking scrape status:", error);
       }
     };
 
     const startPolling = (intervalMs: number) => {
       if (pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(checkData, intervalMs);
+      pollTimer = setInterval(checkScrape, intervalMs);
+      // Also check immediately
+      checkScrape();
     };
 
-    // Initial poll cadence: every 10 seconds for faster feedback
-    startPolling(10000);
+    // Initial poll cadence: every 5 seconds for faster feedback
+    startPolling(5000);
     
     // Also update countdown only if we are in "Modal Mode" (isScraping)
     if (isScraping) {
@@ -217,13 +260,15 @@ const App: React.FC = () => {
 
           if (!hasSwitchedToFastPolling && next <= 0) {
             hasSwitchedToFastPolling = true;
-            // Switch to fast polling (5s) if we are overtime
-            startPolling(5000); 
+            // Switch to faster polling (3s) if we are overtime
+            startPolling(3000); 
           }
 
           if (next <= -180) { // 3 minutes overtime
-            alert("Data er forsinket af Google. Opdater venligst siden om et par minutter.");
+            alert("Data er forsinket. Opdater venligst siden om et par minutter.");
             setIsScraping(false);
+            setIsRefreshing(false);
+            setCurrentRunId(null);
             return -180;
           }
 
@@ -237,7 +282,7 @@ const App: React.FC = () => {
       if (countdownTimer) clearInterval(countdownTimer);
       if (pollTimer) clearInterval(pollTimer);
     };
-  }, [isScraping, isRefreshing, sessionId, scrapeStartTime, dataCountAtScrapeStart]);
+  }, [isScraping, isRefreshing, sessionId, currentRunId]);
 
   // Derived State: Unique Brands
   const allBrands = useMemo(() => {

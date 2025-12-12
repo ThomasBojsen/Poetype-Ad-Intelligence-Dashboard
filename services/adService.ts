@@ -145,7 +145,7 @@ export const addBrand = async (sessionId: string, url: string): Promise<boolean>
  * Trigger scraping workflow for the session
  * First adds all URLs as brands, then triggers the scrape
  */
-export const triggerScrapeWorkflow = async (urls: string[], sessionId: string): Promise<boolean> => {
+export const triggerScrapeWorkflow = async (urls: string[], sessionId: string): Promise<{ success: boolean; runId?: string }> => {
   try {
     // Step 1: Add all URLs as brands
     const addBrandPromises = urls.map(url => addBrand(sessionId, url));
@@ -169,15 +169,18 @@ export const triggerScrapeWorkflow = async (urls: string[], sessionId: string): 
     if (!response.ok) {
       const error = await response.json();
       console.error("Failed to trigger scrape:", error);
-      return false;
+      return { success: false };
     }
 
     const result = await response.json();
     console.log("Scrape triggered successfully:", result);
-    return true;
+    return { 
+      success: true, 
+      runId: result.runId 
+    };
   } catch (error) {
     console.error("Failed to trigger scrape workflow", error);
-    return false;
+    return { success: false };
   }
 };
 
@@ -185,7 +188,7 @@ export const triggerScrapeWorkflow = async (urls: string[], sessionId: string): 
  * Trigger a refresh scrape for existing brands in the session
  * Does NOT add new brands, just triggers scrape for existing ones
  */
-export const refreshSessionScrape = async (sessionId: string): Promise<boolean> => {
+export const refreshSessionScrape = async (sessionId: string): Promise<{ success: boolean; runId?: string }> => {
   try {
     const response = await fetch(`${API_BASE_URL}/trigger-scrape`, {
       method: 'POST',
@@ -198,15 +201,18 @@ export const refreshSessionScrape = async (sessionId: string): Promise<boolean> 
     if (!response.ok) {
       const error = await response.json();
       console.error("Failed to trigger refresh scrape:", error);
-      return false;
+      return { success: false };
     }
 
     const result = await response.json();
     console.log("Refresh scrape triggered successfully:", result);
-    return true;
+    return { 
+      success: true, 
+      runId: result.runId 
+    };
   } catch (error) {
     console.error("Failed to trigger refresh scrape", error);
-    return false;
+    return { success: false };
   }
 };
 
@@ -237,6 +243,33 @@ export const fetchBrands = async (sessionId: string): Promise<{ id: number | str
   } catch (error) {
     console.error("Error fetching brands:", error);
     return []; 
+  }
+};
+
+/**
+ * Check the status of an Apify scrape run
+ */
+export const checkScrapeStatus = async (runId: string, sessionId: string): Promise<{ status: 'RUNNING' | 'COMPLETED' | 'FAILED' | 'UNKNOWN'; ads?: any[]; count?: number; message?: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/check-scrape?runId=${encodeURIComponent(runId)}&sessionId=${encodeURIComponent(sessionId)}`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Failed to check scrape status:", error);
+      return { status: 'FAILED', message: error.error || 'Failed to check status' };
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Error checking scrape status", error);
+    return { status: 'FAILED', message: 'Network error' };
   }
 };
 
