@@ -102,6 +102,7 @@ export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string
       ad_copy: ad.ad_copy || '',
       days_active: ad.days_active,
       viral_score: ad.viral_score,
+      brand_ad_library_url: ad.brand_ad_library_url,
     }));
 
     // Return ads with lastUpdated timestamp

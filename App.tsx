@@ -190,6 +190,7 @@ const App: React.FC = () => {
           ad_copy: ad.ad_copy || '',
           days_active,
           viral_score,
+          brand_ad_library_url: ad.brand_ad_library_url,
         };
       });
       

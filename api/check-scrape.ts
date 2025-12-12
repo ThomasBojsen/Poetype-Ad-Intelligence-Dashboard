@@ -227,6 +227,11 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || (item.adSnapshotUrl && typeof item.adSnapshotUrl === 'string' && item.adSnapshotUrl.trim() !== '')
     || adLibraryUrl;
 
+  // Get brand's generic URL from Apify object (item.url)
+  const brand_ad_library_url = (item.url && typeof item.url === 'string' && item.url.trim() !== '')
+    ? item.url
+    : adLibraryUrl; // Fallback to the passed argument if item.url is not available
+
   return {
     id: item.ad_archive_id || item.id || item.adId || String(item.ad_snapshot_url || Math.random()),
     page_name: item.page_name || item.pageName || item.page_name || 'Unknown',
@@ -236,6 +241,7 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     heading: heading,
     ad_copy: adCopy,
     ad_library_url: ad_library_url,
+    brand_ad_library_url: brand_ad_library_url,
     first_seen: first_seen,
     start_date_formatted: start_date_formatted,
     last_seen: new Date().toISOString(),

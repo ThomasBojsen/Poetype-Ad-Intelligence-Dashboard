@@ -242,6 +242,11 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || (item.adSnapshotUrl && typeof item.adSnapshotUrl === 'string' && item.adSnapshotUrl.trim() !== '')
     || adLibraryUrl;
   
+  // Get brand's generic URL from Apify object (item.url)
+  const brand_ad_library_url = (item.url && typeof item.url === 'string' && item.url.trim() !== '')
+    ? item.url
+    : adLibraryUrl; // Fallback to the passed argument if item.url is not available
+  
   // Log which source was used (only for first item to avoid spam)
   if (!mapApifyItemToAd._urlLogged) {
     console.log('ad_library_url source:', {
@@ -249,9 +254,11 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
       item_ad_library_url_type: typeof item.ad_library_url,
       item_ad_library_url_length: item.ad_library_url?.length,
       item_ad_library_url_trimmed: item.ad_library_url?.trim(),
+      item_url: item.url,
       item_adSnapshotUrl: item.adSnapshotUrl,
       adLibraryUrl_argument: adLibraryUrl,
       finalValue: ad_library_url,
+      brandUrl: brand_ad_library_url,
       source: (item.ad_library_url && typeof item.ad_library_url === 'string' && item.ad_library_url.trim() !== '') 
         ? 'item.ad_library_url' 
         : (item.adSnapshotUrl && typeof item.adSnapshotUrl === 'string' && item.adSnapshotUrl.trim() !== '')
@@ -270,6 +277,7 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     heading: heading,
     ad_copy: adCopy,
     ad_library_url: ad_library_url,
+    brand_ad_library_url: brand_ad_library_url,
     first_seen: first_seen,
     start_date_formatted: start_date_formatted,
     last_seen: new Date().toISOString(),

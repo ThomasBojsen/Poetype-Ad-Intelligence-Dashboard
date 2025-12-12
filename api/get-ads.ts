@@ -132,10 +132,30 @@ export default async function handler(
       // Calculate viral score (reach per day)
       const viral_score = Math.round(ad.reach / days_active);
       
+      // Use brand_ad_library_url from database if available, otherwise find matching brand URL as fallback
+      let brandAdLibraryUrl: string | undefined = ad.brand_ad_library_url;
+      
+      if (!brandAdLibraryUrl) {
+        // Fallback: Find matching brand URL by checking if ad's ad_library_url matches or contains any brand URL
+        const adUrl = ad.ad_library_url || '';
+        for (const brandUrl of brandUrls) {
+          // If ad URL contains brand URL or brand URL contains ad URL, they're related
+          if (adUrl.includes(brandUrl) || brandUrl.includes(adUrl) || adUrl === brandUrl) {
+            brandAdLibraryUrl = brandUrl;
+            break;
+          }
+        }
+        // If no match found, use first brand URL as fallback
+        if (!brandAdLibraryUrl && brandUrls.length > 0) {
+          brandAdLibraryUrl = brandUrls[0];
+        }
+      }
+      
       return {
         ...ad,
         days_active,
         viral_score,
+        brand_ad_library_url: brandAdLibraryUrl, // Add brand URL for fallback
       };
     });
 

@@ -9,6 +9,7 @@ export interface AdData {
   ad_copy: string;
   days_active?: number;
   viral_score?: number; // Reach per day
+  brand_ad_library_url?: string; // Brand's generic ad library URL for fallback
 }
 
 export interface FilterState {
