@@ -194,10 +194,13 @@ const App: React.FC = () => {
         };
       });
       
-      setRawData(mappedAds);
+      // Sort by reach (descending - highest first)
+      const sortedAds = mappedAds.sort((a, b) => (b.reach || 0) - (a.reach || 0));
+      
+      setRawData(sortedAds);
       setLastUpdated(new Date().toISOString());
-      if (mappedAds.length > 0) {
-        const maxR = Math.max(...mappedAds.map(d => d.reach), 0);
+      if (sortedAds.length > 0) {
+        const maxR = Math.max(...sortedAds.map(d => d.reach), 0);
         setFilters(prev => ({ ...prev, maxReach: maxR }));
       }
       setLoading(false);
@@ -292,7 +295,7 @@ const App: React.FC = () => {
 
   // Derived State: Filtered Data
   const filteredData = useMemo(() => {
-    return rawData.filter(item => {
+    const filtered = rawData.filter(item => {
       const matchesBrand = filters.selectedBrands.length === 0 || filters.selectedBrands.includes(item.page_name);
       const matchesReach = item.reach >= filters.minReach && item.reach <= filters.maxReach;
       
@@ -310,6 +313,9 @@ const App: React.FC = () => {
       
       return matchesBrand && matchesReach && matchesMediaType;
     });
+    
+    // Sort by reach (descending - highest first)
+    return filtered.sort((a, b) => (b.reach || 0) - (a.reach || 0));
   }, [rawData, filters]);
 
   // Derived State: Stats

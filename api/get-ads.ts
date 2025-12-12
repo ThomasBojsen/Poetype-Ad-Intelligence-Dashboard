@@ -186,10 +186,13 @@ export default async function handler(
       };
     });
 
+    // Sort by reach (descending - highest first)
+    const sortedAds = enhancedAds.sort((a, b) => (b.reach || 0) - (a.reach || 0));
+
     return res.status(200).json({
       success: true,
-      ads: enhancedAds,
-      count: enhancedAds.length,
+      ads: sortedAds,
+      count: sortedAds.length,
       lastUpdated: lastUpdated,
     });
   } catch (error: any) {
