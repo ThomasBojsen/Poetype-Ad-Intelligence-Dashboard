@@ -236,15 +236,6 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
   // Save start_date_formatted as-is from Apify (for calculation purposes)
   const start_date_formatted = item.start_date_formatted || item.start_date || null;
 
-  // Prioritize specific ad URL over generic brand URL
-  // The specific link to the ad is located at the root: item.ad_library_url
-  // 1. Check item.ad_library_url (primary field from Apify JSON)
-  // 2. Check item.adSnapshotUrl (camelCase fallback)
-  // 3. Fall back to generic adLibraryUrl only if specific one is missing
-  const ad_library_url = item.ad_library_url 
-    || item.adSnapshotUrl 
-    || adLibraryUrl;
-
   return {
     id: item.ad_archive_id || item.id || item.adId || String(item.ad_snapshot_url || Math.random()),
     page_name: item.page_name || item.pageName || item.page_name || 'Unknown',
@@ -253,7 +244,7 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     thumbnail_url: thumbnail,
     heading: heading,
     ad_copy: adCopy,
-    ad_library_url: ad_library_url,
+    ad_library_url: item.ad_library_url || item.adSnapshotUrl || adLibraryUrl,
     first_seen: first_seen,
     start_date_formatted: start_date_formatted,
     last_seen: new Date().toISOString(),
