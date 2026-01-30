@@ -50,6 +50,7 @@ const App: React.FC = () => {
     maxReach: 1000000, // Default max
     mediaType: 'all',
   });
+  const [viewMode, setViewMode] = useState<'client' | 'performance'>('client');
 
   useEffect(() => {
     try {
@@ -340,7 +341,7 @@ const App: React.FC = () => {
       />
 
       {/* Filter Sidebar */}
-      <Sidebar 
+      {viewMode==='client' && (<Sidebar 
         allBrands={allBrands} 
         filters={filters} 
         setFilters={setFilters}
@@ -352,10 +353,23 @@ const App: React.FC = () => {
         }}
         refreshTrigger={brandsRefreshTrigger}
         rawData={rawData}
-      />
+      />)}
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-[#FFF2EB]">
+        {viewMode==='performance' && (
+          <div className='max-w-7xl mx-auto px-8 py-10'>
+            <div className='bg-white border border-[#EADFD8] rounded-2xl p-6 shadow-sm mb-6'>
+              <h3 className='text-xl font-semibold text-[#0B1221] mb-2'>Performance Overview</h3>
+              <p className='text-sm text-stone-500 mb-4'>Placeholder for motion-style graphs and filters.</p>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-stone-600'>
+                <div>Total ads: {filteredData.length}</div>
+                <div>Total reach: {filteredData.reduce((s,a)=>s+(a.reach||0),0).toLocaleString('da-DK')}</div>
+              </div>
+            </div>
+          </div>
+        )}
+        {viewMode==='client' && (
         <div className="max-w-7xl mx-auto px-8 py-10">
           
           {/* Header */}
@@ -376,6 +390,10 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-3">
+              <div className='flex items-center gap-2 bg-white border border-[#EADFD8] rounded-full px-1 py-1'>
+                <button onClick={() => setViewMode('client')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='client' ? 'bg-[#0B1221] text-white' : 'text-stone-600'}`}>Konkurrentanalyse</button>
+                <button onClick={() => setViewMode('performance')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='performance' ? 'bg-[#0B1221] text-white' : 'text-stone-600'}`}>Performance</button>
+              </div>
               <button 
                 onClick={handleForceRefresh}
                 disabled={isRefreshing || isScraping}
@@ -395,6 +413,13 @@ const App: React.FC = () => {
             </div>
           </header>
 
+          {viewMode==='performance' && (
+            <div className='mb-8 p-4 bg-white border border-[#EADFD8] rounded-2xl shadow-sm'>
+              <h3 className='text-lg font-semibold text-[#0B1221] mb-2'>Performance (beta)</h3>
+              <p className='text-sm text-stone-500 mb-4'>Graphs and advanced filters coming. Showing current stats.</p>
+              {/* Reuse existing stats below */}
+            </div>
+          )}
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 animate-reveal" style={{ animationDelay: '200ms' }}>
             {/* Stat Card 1 */}
@@ -483,6 +508,7 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
+              )}
       </main>
     </div>
   );
