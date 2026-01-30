@@ -43,7 +43,7 @@ async function fetchInsightsForAds(adIds: string[], datePreset: string): Promise
   for (const adId of uniqueIds) {
     try {
       const url = new URL(`https://graph.facebook.com/v19.0/${adId}/insights`);
-      url.searchParams.set('fields', 'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values,roas,currency');
+      url.searchParams.set('fields', 'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values,purchase_roas,currency');
       url.searchParams.set('date_preset', datePreset);
       url.searchParams.set('access_token', metaToken);
 
