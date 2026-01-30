@@ -275,3 +275,45 @@ export const checkScrapeStatus = async (runId: string): Promise<{ status: string
     return { status: 'unknown' };
   }
 };
+
+
+export const fetchPerformanceData = async (): Promise<{ ads: AdData[] }> => {
+  try {
+    const response = await fetch(`/api/get-ads-all`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`Failed to fetch performance ads: ${response.statusText}`);
+    const json = await response.json();
+    const mapped = (json.ads || []).map((ad: any) => ({
+      id: ad.id,
+      page_name: ad.page_name,
+      reach: ad.reach,
+      ad_library_url: ad.ad_library_url,
+      video_url: ad.video_url || '',
+      thumbnail: ad.thumbnail_url || ad.thumbnail || '',
+      heading: ad.heading || '',
+      ad_copy: ad.ad_copy || '',
+      days_active: ad.days_active,
+      viral_score: ad.viral_score,
+      brand_ad_library_url: ad.brand_ad_library_url,
+      ad_id: ad.ad_id,
+      spend: ad.spend,
+      impressions: ad.impressions,
+      clicks: ad.clicks,
+      cpm: ad.cpm,
+      cpc: ad.cpc,
+      ctr: ad.ctr,
+      roas: ad.roas,
+      purchases: ad.purchases,
+      purchase_value: ad.purchase_value,
+      insights_currency: ad.insights_currency,
+      insights_date_preset: ad.insights_date_preset,
+    }));
+    return { ads: mapped };
+  } catch (err) {
+    console.error('Error fetching performance ads', err);
+    return { ads: [] };
+  }
+};

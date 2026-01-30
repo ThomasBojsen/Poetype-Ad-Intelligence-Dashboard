@@ -4,7 +4,7 @@ import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
-import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, checkScrapeStatus, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
+import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, checkScrapeStatus, SCRAPE_WAIT_TIME_SECONDS, fetchPerformanceData } from './services/adService';
 import { LayoutGrid, Target, Trophy, RefreshCw, Eye } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';
@@ -30,6 +30,7 @@ const PoetypeP: React.FC<{ className?: string }> = ({ className = '' }) => (
 
 const App: React.FC = () => {
   const [rawData, setRawData] = useState<AdData[]>([]);
+  const [performanceAds, setPerformanceAds] = useState<AdData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -97,6 +98,14 @@ const App: React.FC = () => {
     if (!sessionId) return;
     loadData();
   }, [sessionId, loadData]);
+
+  useEffect(() => {
+    const loadPerf = async () => {
+      const res = await fetchPerformanceData();
+      setPerformanceAds(res.ads || []);
+    };
+    loadPerf();
+  }, []);
 
   const handleStartScrape = async (urls: string[]) => {
     if (!sessionId) {
@@ -322,11 +331,11 @@ const App: React.FC = () => {
   // Derived State: Stats
   const totalAds = filteredData.length;
   const totalReach = filteredData.reduce((sum, item) => sum + item.reach, 0);
-  const totalSpend = filteredData.reduce((sum, item) => sum + (item.spend || 0), 0);
-  const avgRoas = filteredData.length > 0 ? filteredData.reduce((sum, item) => sum + (item.roas || 0), 0) / filteredData.length : 0;
-  const totalImpressions = filteredData.reduce((sum, item) => sum + (item.impressions || 0), 0);
-  const totalClicks = filteredData.reduce((sum, item) => sum + (item.clicks || 0), 0);
-  const performanceList = [...filteredData].sort((a, b) => (b.spend || 0) - (a.spend || 0));
+  const totalSpend = performanceAds.reduce((sum, item) => sum + (item.spend || 0), 0);
+  const avgRoas = performanceAds.length > 0 ? performanceAds.reduce((sum, item) => sum + (item.roas || 0), 0) / performanceAds.length : 0;
+  const totalImpressions = performanceAds.reduce((sum, item) => sum + (item.impressions || 0), 0);
+  const totalClicks = performanceAds.reduce((sum, item) => sum + (item.clicks || 0), 0);
+  const performanceList = [...performanceAds].sort((a, b) => (b.spend || 0) - (a.spend || 0));
 
   return (
     <div className="flex h-screen overflow-hidden text-stone-900">
