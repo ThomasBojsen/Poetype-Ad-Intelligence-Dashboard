@@ -228,26 +228,27 @@ export const refreshSessionScrape = async (sessionId: string): Promise<{ success
   }
 };
 
-export const fetchBrands = async (sessionId: string): Promise<{ brands: any[] }> => {
+export const fetchBrands = async (sessionId: string): Promise<any[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/get-brands?sessionId=${encodeURIComponent(sessionId)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
     if (!response.ok) throw new Error(`Failed to fetch brands: ${response.statusText}`);
-    return await response.json();
+    const json = await response.json();
+    return Array.isArray(json) ? json : (json.brands || []);
   } catch (err) {
     console.error('Error fetching brands', err);
-    return { brands: [] };
+    return [];
   }
 };
 
-export const deleteBrand = async (sessionId: string, url: string): Promise<boolean> => {
+export const deleteBrand = async (sessionId: string, brandId: string | number): Promise<boolean> => {
   try {
     const response = await fetch(`${API_BASE_URL}/delete-brand`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, url }),
+      body: JSON.stringify({ sessionId, brandId }),
     });
     if (!response.ok) {
       const error = await response.json();
