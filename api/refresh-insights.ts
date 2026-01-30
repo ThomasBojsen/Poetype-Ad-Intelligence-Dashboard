@@ -126,7 +126,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const datePreset = (req.body?.datePreset as string) || 'last_30d';
+  const datePreset = (req.body?.datePreset as string) || 'last_7d';
+  const batchLimit = 50;
 
   try {
     const { data, error } = await supabase
@@ -142,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const adIdToSupabaseId: Record<string, string> = {};
     const adIds: string[] = [];
-    (data || []).forEach((row) => {
+    (data || []).slice(0, batchLimit).forEach((row) => {
       if (row.ad_id) {
         adIdToSupabaseId[row.ad_id] = row.id;
         adIds.push(row.ad_id);
