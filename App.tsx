@@ -322,6 +322,11 @@ const App: React.FC = () => {
   // Derived State: Stats
   const totalAds = filteredData.length;
   const totalReach = filteredData.reduce((sum, item) => sum + item.reach, 0);
+  const totalSpend = filteredData.reduce((sum, item) => sum + (item.spend || 0), 0);
+  const avgRoas = filteredData.length > 0 ? filteredData.reduce((sum, item) => sum + (item.roas || 0), 0) / filteredData.length : 0;
+  const totalImpressions = filteredData.reduce((sum, item) => sum + (item.impressions || 0), 0);
+  const totalClicks = filteredData.reduce((sum, item) => sum + (item.clicks || 0), 0);
+  const performanceList = [...filteredData].sort((a, b) => (b.spend || 0) - (a.spend || 0));
 
   return (
     <div className="flex h-screen overflow-hidden text-stone-900">
@@ -358,17 +363,70 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-[#FFF2EB]">
         {viewMode==='performance' && (
-          <div className='max-w-7xl mx-auto px-8 py-10'>
-            <div className='bg-white border border-[#EADFD8] rounded-2xl p-6 shadow-sm mb-6'>
+          <div className='max-w-7xl mx-auto px-8 py-10 space-y-6'>
+            <div className='bg-white border border-[#EADFD8] rounded-2xl p-6 shadow-sm'>
               <h3 className='text-xl font-semibold text-[#0B1221] mb-2'>Performance Overview</h3>
-              <p className='text-sm text-stone-500 mb-4'>Placeholder for motion-style graphs and filters.</p>
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-stone-600'>
-                <div>Total ads: {filteredData.length}</div>
-                <div>Total reach: {filteredData.reduce((s,a)=>s+(a.reach||0),0).toLocaleString('da-DK')}</div>
+              <p className='text-sm text-stone-500 mb-4'>Meta Insights (using configured ad accounts).</p>
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+                <div className='rounded-xl border border-[#EADFD8] bg-[#FFF2EB] p-4'>
+                  <p className='text-xs uppercase tracking-wide text-stone-400 font-semibold'>Spend</p>
+                  <p className='text-xl font-semibold text-[#0B1221]'>DKK {totalSpend.toFixed(0)}</p>
+                </div>
+                <div className='rounded-xl border border-[#EADFD8] bg-white p-4'>
+                  <p className='text-xs uppercase tracking-wide text-stone-400 font-semibold'>Avg ROAS</p>
+                  <p className='text-xl font-semibold text-[#0B1221]'>{avgRoas.toFixed(2)}</p>
+                </div>
+                <div className='rounded-xl border border-[#EADFD8] bg-white p-4'>
+                  <p className='text-xs uppercase tracking-wide text-stone-400 font-semibold'>Impressions</p>
+                  <p className='text-xl font-semibold text-[#0B1221]'>{totalImpressions.toLocaleString('da-DK')}</p>
+                </div>
+                <div className='rounded-xl border border-[#EADFD8] bg-white p-4'>
+                  <p className='text-xs uppercase tracking-wide text-stone-400 font-semibold'>Clicks</p>
+                  <p className='text-xl font-semibold text-[#0B1221]'>{totalClicks.toLocaleString('da-DK')}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className='bg-white border border-[#EADFD8] rounded-2xl p-6 shadow-sm'>
+              <div className='flex items-center justify-between mb-4'>
+                <div>
+                  <h4 className='text-lg font-semibold text-[#0B1221]'>Top ads by spend</h4>
+                  <p className='text-sm text-stone-500'>Showing up to 20 ads with spend data.</p>
+                </div>
+              </div>
+              <div className='overflow-auto'>
+                <table className='min-w-full text-sm text-stone-700'>
+                  <thead>
+                    <tr className='text-left border-b border-[#EADFD8] text-stone-500'>
+                      <th className='py-2 pr-4'>Page</th>
+                      <th className='py-2 pr-4'>Spend</th>
+                      <th className='py-2 pr-4'>ROAS</th>
+                      <th className='py-2 pr-4'>Reach</th>
+                      <th className='py-2 pr-4'>Impressions</th>
+                      <th className='py-2 pr-4'>Clicks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {performanceList.slice(0,20).map((ad) => (
+                      <tr key={ad.id} className='border-b border-[#F5EBE6] hover:bg-[#FFF8F5]'>
+                        <td className='py-2 pr-4'>{ad.page_name}</td>
+                        <td className='py-2 pr-4'>DKK {(ad.spend || 0).toFixed(0)}</td>
+                        <td className='py-2 pr-4'>{(ad.roas || 0).toFixed(2)}</td>
+                        <td className='py-2 pr-4'>{(ad.reach || 0).toLocaleString('da-DK')}</td>
+                        <td className='py-2 pr-4'>{(ad.impressions || 0).toLocaleString('da-DK')}</td>
+                        <td className='py-2 pr-4'>{(ad.clicks || 0).toLocaleString('da-DK')}</td>
+                      </tr>
+                    ))}
+                    {performanceList.length === 0 && (
+                      <tr><td className='py-4 text-stone-400' colSpan={6}>No performance data yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
+
         {viewMode==='client' && (
         <div className="max-w-7xl mx-auto px-8 py-10">
           
