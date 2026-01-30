@@ -48,13 +48,14 @@ const MOCK_DATA: AdData[] = [
 // Check if we're in development mode
 const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
 
-export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string): Promise<{ ads: AdData[], lastUpdated: string | null } | AdData[]> => {
+export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string): Promise<{ ads: AdData[], lastUpdated: string | null, insightsDatePreset?: string } | AdData[]> => {
   // In development mode, always use mock data
   if (isDevelopment) {
     await new Promise(resolve => setTimeout(resolve, 800));
     return {
       ads: MOCK_DATA,
       lastUpdated: new Date().toISOString(),
+      insightsDatePreset: 'mock',
     };
   }
 
@@ -63,6 +64,7 @@ export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string
     return {
       ads: MOCK_DATA,
       lastUpdated: new Date().toISOString(),
+      insightsDatePreset: 'mock',
     };
   }
 
@@ -97,18 +99,31 @@ export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string
       reach: ad.reach,
       ad_library_url: ad.ad_library_url,
       video_url: ad.video_url || '',
-      thumbnail: ad.thumbnail_url || '',
+      thumbnail: ad.thumbnail_url || ad.thumbnail || '',
       heading: ad.heading || '',
       ad_copy: ad.ad_copy || '',
       days_active: ad.days_active,
       viral_score: ad.viral_score,
       brand_ad_library_url: ad.brand_ad_library_url,
+      ad_id: ad.ad_id,
+      spend: ad.spend,
+      impressions: ad.impressions,
+      clicks: ad.clicks,
+      cpm: ad.cpm,
+      cpc: ad.cpc,
+      ctr: ad.ctr,
+      roas: ad.roas,
+      purchases: ad.purchases,
+      purchase_value: ad.purchase_value,
+      insights_currency: ad.insights_currency,
+      insights_date_preset: ad.insights_date_preset,
     }));
 
     // Return ads with lastUpdated timestamp
     return {
       ads: mappedAds,
       lastUpdated: result.lastUpdated || null,
+      insightsDatePreset: result.insightsDatePreset,
     };
   } catch (error) {
     console.error("Error fetching data from API", error);
@@ -201,101 +216,61 @@ export const refreshSessionScrape = async (sessionId: string): Promise<{ success
 
     if (!response.ok) {
       const error = await response.json();
-      console.error("Failed to trigger refresh scrape:", error);
+      console.error("Failed to refresh scrape:", error);
       return { success: false };
     }
 
     const result = await response.json();
-    console.log("Refresh scrape triggered successfully:", result);
-    return { 
-      success: true, 
-      runId: result.runId 
-    };
+    return { success: true, runId: result.runId };
   } catch (error) {
-    console.error("Failed to trigger refresh scrape", error);
+    console.error("Failed to refresh scrape", error);
     return { success: false };
   }
 };
 
-/**
- * Fetch brands for a session
- */
-export const fetchBrands = async (sessionId: string): Promise<{ id: number | string; name: string; ad_library_url: string; is_active: boolean }[]> => {
+export const fetchBrands = async (sessionId: string): Promise<{ brands: any[] }> => {
   try {
     const response = await fetch(`${API_BASE_URL}/get-brands?sessionId=${encodeURIComponent(sessionId)}`, {
       method: 'GET',
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
     });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch brands: ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to fetch brands');
-    }
-
-    return result.brands || [];
-  } catch (error) {
-    console.error("Error fetching brands:", error);
-    return []; 
+    if (!response.ok) throw new Error(`Failed to fetch brands: ${response.statusText}`);
+    return await response.json();
+  } catch (err) {
+    console.error('Error fetching brands', err);
+    return { brands: [] };
   }
 };
 
-/**
- * Check the status of an Apify scrape run
- */
-export const checkScrapeStatus = async (runId: string, sessionId: string): Promise<{ status: 'RUNNING' | 'COMPLETED' | 'FAILED' | 'UNKNOWN'; ads?: any[]; count?: number; message?: string }> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/check-scrape?runId=${encodeURIComponent(runId)}&sessionId=${encodeURIComponent(sessionId)}`, {
-      method: 'GET',
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error("Failed to check scrape status:", error);
-      return { status: 'FAILED', message: error.error || 'Failed to check status' };
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error("Error checking scrape status", error);
-    return { status: 'FAILED', message: 'Network error' };
-  }
-};
-
-/**
- * Delete a brand (soft delete: sets is_active to false)
- */
-export const deleteBrand = async (sessionId: string, brandId: number | string): Promise<boolean> => {
+export const deleteBrand = async (sessionId: string, url: string): Promise<boolean> => {
   try {
     const response = await fetch(`${API_BASE_URL}/delete-brand`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ sessionId, brandId }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, url }),
     });
-
     if (!response.ok) {
       const error = await response.json();
-      console.error("Failed to delete brand:", error);
+      console.error('Failed to delete brand:', error);
       return false;
     }
-
     return true;
-  } catch (error) {
-    console.error("Error deleting brand:", error);
+  } catch (err) {
+    console.error('Error deleting brand', err);
     return false;
+  }
+};
+
+export const checkScrapeStatus = async (runId: string): Promise<{ status: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/check-scrape?runId=${encodeURIComponent(runId)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error(`Failed to check scrape status: ${response.statusText}`);
+    return await response.json();
+  } catch (err) {
+    console.error('Error checking scrape status', err);
+    return { status: 'unknown' };
   }
 };

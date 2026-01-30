@@ -1,0 +1,164 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const metaToken = process.env.META_TOKEN;
+const metaAccountsEnv = process.env.META_AD_ACCOUNTS || '';
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+const metaAccounts = metaAccountsEnv
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function reduceActions<T extends { action_type?: string; value?: string | number; }>(
+  arr: T[] | undefined,
+  predicate: (action: T) => boolean,
+  extractor: (action: T) => number,
+): number {
+  if (!arr || !Array.isArray(arr)) return 0;
+  return arr.reduce((sum, action) => {
+    if (predicate(action)) {
+      const val = extractor(action);
+      return sum + (isNaN(val) ? 0 : val);
+    }
+    return sum;
+  }, 0);
+}
+
+async function fetchInsightsForAds(adIds: string[], datePreset: string): Promise<Record<string, any>> {
+  if (!metaToken || metaAccounts.length === 0) {
+    console.warn('META_TOKEN or META_AD_ACCOUNTS missing; skipping insights');
+    return {};
+  }
+
+  const uniqueIds = Array.from(new Set(adIds)).filter(Boolean);
+  const insightsMap: Record<string, any> = {};
+
+  for (const adId of uniqueIds) {
+    try {
+      const url = new URL(`https://graph.facebook.com/v19.0/${adId}/insights`);
+      url.searchParams.set('fields', 'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values,roas,currency');
+      url.searchParams.set('date_preset', datePreset);
+      url.searchParams.set('access_token', metaToken);
+
+      const resp = await fetch(url.toString());
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.warn(`Insights fetch failed for ad ${adId}: ${resp.status} ${text}`);
+        continue;
+      }
+      const data = await resp.json();
+      const first = data?.data?.[0];
+      if (!first) continue;
+
+      const actions = first.actions as any[] | undefined;
+      const actionValues = first.action_values as any[] | undefined;
+      const roasArr = first.roas as any[] | undefined;
+
+      const purchases = reduceActions(actions, a => a.action_type?.includes('purchase'), a => Number(a.value || 0));
+      const purchaseValue = reduceActions(actionValues, a => a.action_type?.includes('purchase'), a => Number(a.value || 0));
+      const roas = roasArr && roasArr.length > 0 ? Number(roasArr[0].value || 0) : 0;
+
+      insightsMap[adId] = {
+        spend: Number(first.spend || 0),
+        impressions: Number(first.impressions || 0),
+        clicks: Number(first.clicks || 0),
+        cpm: Number(first.cpm || 0),
+        cpc: Number(first.cpc || 0),
+        ctr: Number(first.ctr || 0),
+        roas,
+        purchases,
+        purchase_value: purchaseValue,
+        currency: first.currency,
+        date_preset: datePreset,
+      };
+    } catch (err) {
+      console.warn(`Error fetching insights for ad ${adId}:`, err);
+    }
+  }
+
+  return insightsMap;
+}
+
+async function persistInsights(
+  adIdToSupabaseId: Record<string, string>,
+  insightsMap: Record<string, any>
+) {
+  const updates = Object.entries(insightsMap).map(([adId, insight]) => {
+    const supaId = adIdToSupabaseId[adId];
+    if (!supaId) return null;
+    return {
+      id: supaId,
+      spend: insight.spend,
+      impressions: insight.impressions,
+      clicks: insight.clicks,
+      cpm: insight.cpm,
+      cpc: insight.cpc,
+      ctr: insight.ctr,
+      roas: insight.roas,
+      purchases: insight.purchases,
+      purchase_value: insight.purchase_value,
+      insights_currency: insight.currency,
+      insights_date_preset: insight.date_preset,
+      last_insights_at: new Date().toISOString(),
+    };
+  }).filter(Boolean) as any[];
+
+  if (updates.length === 0) return;
+
+  const { error } = await supabase
+    .from('ads')
+    .upsert(updates, { onConflict: 'id' });
+
+  if (error) {
+    console.warn('Failed to persist insights to Supabase (refresh):', error.message);
+  }
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const datePreset = (req.body?.datePreset as string) || 'last_30d';
+
+  try {
+    const { data, error } = await supabase
+      .from('ads')
+      .select('id, ad_id')
+      .not('ad_id', 'is', null)
+      .limit(5000);
+
+    if (error) {
+      console.error('Failed to fetch ads for insights refresh:', error);
+      return res.status(500).json({ error: 'Failed to fetch ads' });
+    }
+
+    const adIdToSupabaseId: Record<string, string> = {};
+    const adIds: string[] = [];
+    (data || []).forEach((row) => {
+      if (row.ad_id) {
+        adIdToSupabaseId[row.ad_id] = row.id;
+        adIds.push(row.ad_id);
+      }
+    });
+
+    if (adIds.length === 0) {
+      return res.status(200).json({ success: true, message: 'No ads with ad_id to refresh.' });
+    }
+
+    const insightsMap = await fetchInsightsForAds(adIds, datePreset);
+    await persistInsights(adIdToSupabaseId, insightsMap);
+
+    return res.status(200).json({ success: true, refreshed: Object.keys(insightsMap).length, datePreset });
+  } catch (err: any) {
+    console.error('Unexpected error in refresh-insights:', err);
+    return res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+}

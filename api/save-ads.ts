@@ -17,6 +17,12 @@ if (!apifyToken) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 const apifyClient = new ApifyClient({ token: apifyToken });
 
+function parseAdIdFromUrl(url?: string | null): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/[?&]id=(\d+)/);
+  return match ? match[1] : null;
+}
+
 /**
  * Extract video URL from Apify data structure
  * Handles fallback: cards[0].video_hd_url vs videos[0]
@@ -158,7 +164,6 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || '';
 
   // Extract thumbnail from various possible locations
-  // Common patterns: cards[].image, cards[].imageUrl, cards[].thumbnail
   let thumbnail = item.thumbnail_url 
     || item.thumbnailUrl 
     || item.image_url
@@ -167,8 +172,6 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || item.image
     || '';
 
-  // Try cards arrays (check all cards, not just first)
-  // Prioritize snapshot.cards first (primary structure based on Apify JSON)
   if (!thumbnail) {
     const cardsArrays = [
       item.snapshot?.cards,
@@ -180,7 +183,6 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     for (const cards of cardsArrays) {
       if (Array.isArray(cards)) {
         for (const card of cards) {
-          // Check resized_image_url first (better quality), then original_image_url
           if (card?.resized_image_url) { thumbnail = card.resized_image_url; break; }
           if (card?.original_image_url) { thumbnail = card.original_image_url; break; }
           if (card?.image_url) { thumbnail = card.image_url; break; }
@@ -198,13 +200,10 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     }
   }
 
-  // Use Poetype logo as fallback placeholder if no thumbnail found
   if (!thumbnail) {
     thumbnail = 'https://poetype.dk/wp-content/uploads/2023/04/POETYPE-LOGO.svg';
   }
 
-  // Extract reach from various possible locations
-  // Priority: aaa_info.eu_total_reach > transparency_by_location.eu_transparency.eu_total_reach > reach_estimate
   const reach = item.aaa_info?.eu_total_reach
     || item.transparency_by_location?.eu_transparency?.eu_total_reach
     || item.reach_estimate
@@ -214,13 +213,11 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     || item.impressions
     || 0;
 
-  // Normalize date format - convert "YYYY-MM-DD HH:MM:SS" to ISO format if needed
   const rawFirstSeen = item.first_seen || item.firstSeen || item.started_running || item.start_date_formatted || item.start_date || null;
   let first_seen = null;
   if (rawFirstSeen) {
     try {
       let dateString = String(rawFirstSeen);
-      // Convert "YYYY-MM-DD HH:MM:SS" to ISO format "YYYY-MM-DDTHH:MM:SS"
       if (dateString.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
         dateString = dateString.replace(' ', 'T');
       }
@@ -233,18 +230,13 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     }
   }
 
-  // Save start_date_formatted as-is from Apify (for calculation purposes)
   const start_date_formatted = item.start_date_formatted || item.start_date || null;
 
-  // Use ad_library_url directly from Apify object - no fallback, no matching
   const ad_library_url = item.ad_library_url || item.adSnapshotUrl || '';
-  
-  // Get brand's generic URL from Apify object (item.url)
   const brand_ad_library_url = (item.url && typeof item.url === 'string' && item.url.trim() !== '')
     ? item.url
-    : adLibraryUrl; // Fallback to the passed argument if item.url is not available
-  
-  // Log which source was used (only for first item to avoid spam)
+    : adLibraryUrl;
+
   if (!mapApifyItemToAd._urlLogged) {
     console.log('ad_library_url source:', {
       item_ad_library_url: item.ad_library_url,
@@ -265,6 +257,8 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     mapApifyItemToAd._urlLogged = true;
   }
 
+  const ad_id = parseAdIdFromUrl(ad_library_url || brand_ad_library_url || item.ad_snapshot_url || item.adSnapshotUrl);
+
   return {
     id: item.ad_archive_id || item.id || item.adId || String(item.ad_snapshot_url || Math.random()),
     page_name: item.page_name || item.pageName || item.page_name || 'Unknown',
@@ -278,10 +272,10 @@ function mapApifyItemToAd(item: any, adLibraryUrl: string): any {
     first_seen: first_seen,
     start_date_formatted: start_date_formatted,
     last_seen: new Date().toISOString(),
+    ad_id,
   };
 }
 
-// Add flags to prevent logging every item
 mapApifyItemToAd._logged = false;
 mapApifyItemToAd._urlLogged = false;
 
@@ -289,19 +283,14 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Only allow POST requests (webhook from Apify)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Apify webhook sends event data in standard format
-    // Structure: { resource: { id, defaultDatasetId, ... }, eventType, ... }
     const resource = req.body.resource || req.body.data?.resource;
     const runId = resource?.id;
     const datasetId = resource?.defaultDatasetId;
-    
-    // Get sessionId from query parameter (passed in webhook URL)
     const sessionId = req.query.sessionId as string | undefined;
 
     console.log('Webhook payload:', JSON.stringify(req.body, null, 2));
@@ -317,12 +306,10 @@ export default async function handler(
       });
     }
 
-    // If we have datasetId directly, use it
     if (datasetId) {
       return await processDataset(datasetId, sessionId, res);
     }
 
-    // Fallback: fetch run object to get dataset ID
     return await fetchAndProcessRun(runId, sessionId, res);
   } catch (error: any) {
     console.error('Unexpected error in save-ads:', error);
@@ -362,7 +349,6 @@ async function fetchAndProcessRun(runId: string, sessionId: string | undefined, 
 
 async function processDataset(finalDatasetId: string, sessionId: string | undefined, res: VercelResponse) {
   try {
-    // Fetch dataset items from Apify
     const dataset = await apifyClient.dataset(finalDatasetId);
     const { items } = await dataset.listItems();
 
@@ -375,7 +361,6 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
       });
     }
 
-    // Get ad_library_urls for this session to match ads
     const { data: brands } = await supabase
       .from('brands')
       .select('ad_library_url')
@@ -384,42 +369,34 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
 
     const brandUrls = brands?.map(b => b.ad_library_url) || [];
 
-    // Process and upsert ads
     const adsToUpsert = [];
     const now = new Date().toISOString();
 
-    // Log first item to see structure
     if (items.length > 0) {
       console.log('First Apify item sample:', JSON.stringify(items[0], null, 2));
     }
 
     for (const item of items) {
-      // Try to match item to a brand URL
       const itemUrl = String(item.ad_snapshot_url || item.url || item.ad_library_url || '');
       const matchedBrandUrl = brandUrls.find(url => 
         itemUrl.includes(url) || url.includes(itemUrl)
-      ) || itemUrl || brandUrls[0]; // Fallback to first brand or item URL
+      ) || itemUrl || brandUrls[0];
 
       const adData = mapApifyItemToAd(item, matchedBrandUrl);
       adsToUpsert.push(adData);
     }
 
-    // Perform UPSERT operations
-    // Match on id, update last_seen and reach, keep first_seen unchanged
     const upsertPromises = adsToUpsert.map(async (ad) => {
-      // First, check if ad exists
       const { data: existingAd } = await supabase
         .from('ads')
         .select('id, first_seen')
         .eq('id', ad.id)
         .single();
 
-      // Include brand_ad_library_url in the upsert data
       const upsertData = {
         ...ad,
-        // Preserve first_seen if ad already exists
         first_seen: existingAd?.first_seen || ad.first_seen || now,
-        last_seen: now, // Always update last_seen
+        last_seen: now,
       };
 
       const { error } = await supabase
@@ -454,4 +431,3 @@ async function processDataset(finalDatasetId: string, sessionId: string | undefi
     });
   }
 }
-
