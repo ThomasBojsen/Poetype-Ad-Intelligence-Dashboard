@@ -29,4 +29,10 @@ export interface FilterState {
   minReach: number;
   maxReach: number;
   mediaType: 'all' | 'video' | 'image';
+  minSpend?: number;
+  maxSpend?: number;
+  minRoas?: number;
+  maxRoas?: number;
+  datePreset?: string;
 }
+

@@ -3,12 +3,21 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const metaToken = process.env.META_TOKEN;
+const metaAccountsEnv = process.env.META_AD_ACCOUNTS || '';
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
+const metaAccounts = metaAccountsEnv.split(',').map(s=>s.trim()).filter(Boolean);
+
+function parseAdIdFromUrl(url?: string | null): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/[?&]id=(\d+)/);
+  return match ? match[1] : null;
+}
 
 export default async function handler(
   _req: VercelRequest,
