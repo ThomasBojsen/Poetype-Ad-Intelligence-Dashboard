@@ -69,7 +69,8 @@ const Sidebar: React.FC<SidebarProps> = ({ allBrands, filters, setFilters, maxRe
     setLoadingBrands(true);
     try {
       const fetchedBrands = await fetchBrands(sessionId);
-      setBrands(fetchedBrands);
+      const arr = Array.isArray((fetchedBrands as any)?.brands) ? (fetchedBrands as any).brands : (Array.isArray(fetchedBrands) ? fetchedBrands : []);
+      setBrands(arr);
     } catch (error) {
       console.error('Error loading brands:', error);
     } finally {
