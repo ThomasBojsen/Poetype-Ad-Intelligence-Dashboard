@@ -355,9 +355,9 @@ const App: React.FC = () => {
         rawData={rawData}
       />)}
 
-      <div className='w-full bg-white border-b border-[#EADFD8] px-6 py-3 flex justify-center gap-2'>
-        <button onClick={() => setViewMode('client')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='client' ? 'bg-[#0B1221] text-white' : 'text-stone-600 border border-[#EADFD8]'}`}>Konkurrentanalyse</button>
-        <button onClick={() => setViewMode('performance')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='performance' ? 'bg-[#0B1221] text-white' : 'text-stone-600 border border-[#EADFD8]'}`}>Performance</button>
+      <div className='w-full bg-white border-b border-[#EADFD8] px-6 py-3 flex items-center justify-center gap-6 text-sm font-medium text-stone-600'>
+        <button onClick={() => setViewMode('client')} className={`pb-1 ${viewMode==='client' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Konkurrentanalyse</button>
+        <button onClick={() => setViewMode('performance')} className={`pb-1 ${viewMode==='performance' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Performance</button>
       </div>
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-[#FFF2EB]">
