@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { AdData } from '../../types';
 import { fetchPerformanceInsights } from '../../services/adService';
-import { DollarSign, TrendingUp, Eye, MousePointer, Image as ImageIcon, Filter, Search, X } from 'lucide-react';
+import { DollarSign, TrendingUp, Eye, MousePointer, Image as ImageIcon, Filter, Search, X, RefreshCw } from 'lucide-react';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 type SortKey = 'spend' | 'roas' | null;
 type SortDir = 'asc' | 'desc';
@@ -59,6 +61,8 @@ const defaultFilters: AdIndexFilters = {
 const AdIndex: React.FC = () => {
   const [ads, setAds] = useState<AdData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('spend');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filters, setFilters] = useState<AdIndexFilters>(defaultFilters);
@@ -80,6 +84,47 @@ const AdIndex: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    let totalSynced = 0;
+    let offset = 0;
+    try {
+      for (;;) {
+        const res = await fetch(`${API_BASE_URL}/sync-meta-insights`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accountOffset: offset,
+            accountsPerBatch: 3,
+            maxAdsPerAccount: 20,
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setSyncMessage((json.error as string) || res.statusText || 'Sync failed');
+          break;
+        }
+        totalSynced += json.synced ?? 0;
+        const nextOffset = json.accountOffset ?? offset + 3;
+        if (!json.hasMore || nextOffset >= (json.totalAccounts ?? 0)) {
+          setSyncMessage(
+            totalSynced > 0
+              ? `Synced ${totalSynced} ad(s) across all brands.`
+              : (json.message as string) || 'No new data.'
+          );
+          break;
+        }
+        offset = nextOffset;
+      }
+      await loadData();
+    } catch (e) {
+      setSyncMessage(e instanceof Error ? e.message : 'Network error');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -157,9 +202,27 @@ const AdIndex: React.FC = () => {
   return (
     <div className="flex-1 overflow-y-auto bg-[#FFF2EB] min-h-0">
       <div className="max-w-7xl mx-auto px-8 py-10">
-        <header className="mb-6">
-          <h1 className="text-3xl font-semibold tracking-tight text-[#0B1221]">Ad Index</h1>
-          <p className="text-stone-500 mt-1">Performance data from your Meta Ads</p>
+        <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-[#0B1221]">Ad Index</h1>
+            <p className="text-stone-500 mt-1">Performance data from your Meta Ads</p>
+          </div>
+          <div className="flex flex-col items-start sm:items-end gap-1">
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={syncing || loading}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-[#0B1221] text-white hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw size={16} strokeWidth={1.5} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing all brands...' : 'Sync from Meta'}
+            </button>
+            {syncMessage && (
+              <p className={`text-sm ${syncMessage.startsWith('Synced') ? 'text-stone-600' : 'text-amber-700'}`}>
+                {syncMessage}
+              </p>
+            )}
+          </div>
         </header>
 
         {!loading && (

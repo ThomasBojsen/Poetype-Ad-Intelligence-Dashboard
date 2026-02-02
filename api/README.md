@@ -11,6 +11,7 @@ Set these in your Vercel project settings:
 - `APIFY_TOKEN` - Your Apify API token
 - `VERCEL_URL` - Automatically set by Vercel (or `NEXT_PUBLIC_VERCEL_URL`)
 - `WEBHOOK_BASE_URL` - Optional: Custom base URL for webhooks (useful for local development with ngrok)
+- **Ad Index (Meta insights):** `META_TOKEN` - Meta Marketing API long-lived token (with `ads_read`). `META_AD_ACCOUNTS` - **Comma-separated list of all ad account IDs** (e.g. `act_123,act_456,act_789`). You must list every brand/client account here; otherwise only the first account is synced.
 
 ## Endpoints
 
@@ -64,6 +65,21 @@ Webhook endpoint called by Apify when scraping completes. Processes and saves ad
   "sessionId": "string"
 }
 ```
+
+### POST `/api/sync-meta-insights`
+Fetches Meta Ads insights for configured ad accounts and upserts into `performance_insights`. Supports batching: pass `accountOffset` and `accountsPerBatch` (default 3) to process a slice of accounts per request (avoids timeouts). The frontend calls this in a loop until `hasMore` is false to sync all brands.
+
+**Request Body:**
+```json
+{
+  "accountOffset": 0,
+  "accountsPerBatch": 3,
+  "maxAdsPerAccount": 20,
+  "datePreset": "last_7d"
+}
+```
+
+**Response:** `{ success, synced, totalAccounts, accountOffset, hasMore, message?, errors? }`
 
 ### GET/POST `/api/get-ads`
 Fetches ads for the dashboard, filtered by session.

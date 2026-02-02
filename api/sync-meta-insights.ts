@@ -43,13 +43,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = typeof req.body === 'object' ? req.body : {};
   const datePreset = (body.datePreset as string) || 'last_7d';
-  const maxAccountsPerRun = Math.min(
-    Math.max(Number(body.maxAccountsPerRun) || metaAccounts.length, 1),
-    50
+  const accountOffset = Math.max(0, Number(body.accountOffset) || 0);
+  const accountsPerBatch = Math.min(
+    Math.max(Number(body.accountsPerBatch) || 3, 1),
+    10
   );
   const maxAdsPerAccount = Math.min(Math.max(Number(body.maxAdsPerAccount) || 20, 1), 50);
 
-  const accountsToProcess = metaAccounts.slice(0, maxAccountsPerRun);
+  const accountsToProcess = metaAccounts.slice(accountOffset, accountOffset + accountsPerBatch);
   const errors: { account?: string; ad_id?: string; error: string }[] = [];
   let synced = 0;
   let adsListed = 0;
@@ -185,10 +186,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'Meta API returned 0 ads. Check META_AD_ACCOUNTS (e.g. act_123) and token permissions (ads_read).';
   }
 
+  const nextOffset = accountOffset + accountsToProcess.length;
+  const hasMore = nextOffset < metaAccounts.length;
+
   return res.status(200).json({
     success: true,
     synced,
     datePreset,
+    totalAccounts: metaAccounts.length,
+    processedAccounts: accountsToProcess.length,
+    accountOffset: nextOffset,
+    hasMore,
     ...(message && { message }),
     ...(errors.length > 0 && { errors }),
   });
