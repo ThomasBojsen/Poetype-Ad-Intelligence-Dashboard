@@ -42,10 +42,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = typeof req.body === 'object' ? req.body : {};
-  const datePreset = (body.datePreset as string) || 'last_7d';
+  const since = typeof body.since === 'string' ? body.since.trim() : '';
+  const until = typeof body.until === 'string' ? body.until.trim() : '';
+  const useTimeRange = since && until && /^\d{4}-\d{2}-\d{2}$/.test(since) && /^\d{4}-\d{2}-\d{2}$/.test(until);
+  const datePreset = useTimeRange ? `${since} - ${until}` : ((body.datePreset as string) || 'last_30d');
   const accountOffset = Math.max(0, Number(body.accountOffset) || 0);
   const accountsPerBatch = Math.min(
-    Math.max(Number(body.accountsPerBatch) || 3, 1),
+    Math.max(Number(body.accountsPerBatch) || 1, 1),
     10
   );
   const maxAdsPerAccount = Math.min(Math.max(Number(body.maxAdsPerAccount) || 20, 1), 50);
@@ -92,7 +95,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             'fields',
             'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values'
           );
-          insightsUrl.searchParams.set('date_preset', datePreset);
+          if (useTimeRange) {
+            insightsUrl.searchParams.set('time_range[since]', since);
+            insightsUrl.searchParams.set('time_range[until]', until);
+          } else {
+            insightsUrl.searchParams.set('date_preset', datePreset);
+          }
           insightsUrl.searchParams.set('access_token', metaToken);
 
           const iResp = await fetch(insightsUrl.toString());
