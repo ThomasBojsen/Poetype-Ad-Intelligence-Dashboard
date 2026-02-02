@@ -36,3 +36,22 @@ export interface FilterState {
   datePreset?: string;
 }
 
+/** Row shape for Supabase performance_insights table (and get-performance-insights API response). */
+export interface PerformanceInsight {
+  ad_id: string;
+  account_id?: string | null;
+  name?: string | null;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  cpm: number;
+  cpc: number;
+  ctr: number;
+  purchases: number;
+  purchase_value: number;
+  roas: number | null;
+  currency?: string | null;
+  date_preset?: string | null;
+  fetched_at?: string | null;
+}
+

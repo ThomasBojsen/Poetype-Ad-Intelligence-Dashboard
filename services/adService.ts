@@ -1,4 +1,4 @@
-import { AdData } from '../types';
+import { AdData, PerformanceInsight } from '../types';
 
 // API Base URL - defaults to relative path for same domain, or set VITE_API_URL env var
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -169,6 +169,40 @@ export const fetchPerformanceInsights = async (): Promise<{ ads: AdData[] }> => 
   } catch (err) {
     console.error('Error fetching performance insights', err);
     return { ads: [] };
+  }
+};
+
+/** Fetch performance insights as PerformanceInsight[] for Ad Index dashboard. */
+export const fetchPerformanceInsightsList = async (): Promise<PerformanceInsight[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/get-performance-insights`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`Failed to fetch performance insights: ${response.statusText}`);
+    const json = await response.json();
+    const rows = json.ads || [];
+    return rows.map((row: any) => ({
+      ad_id: row.ad_id || row.id,
+      account_id: row.account_id ?? null,
+      name: row.name ?? null,
+      spend: Number(row.spend ?? 0),
+      impressions: Number(row.impressions ?? 0),
+      clicks: Number(row.clicks ?? 0),
+      cpm: Number(row.cpm ?? 0),
+      cpc: Number(row.cpc ?? 0),
+      ctr: Number(row.ctr ?? 0),
+      purchases: Number(row.purchases ?? 0),
+      purchase_value: Number(row.purchase_value ?? 0),
+      roas: row.roas != null ? Number(row.roas) : null,
+      currency: row.currency ?? null,
+      date_preset: row.date_preset ?? null,
+      fetched_at: row.fetched_at ?? null,
+    }));
+  } catch (err) {
+    console.error('Error fetching performance insights list', err);
+    return [];
   }
 };
 

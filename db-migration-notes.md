@@ -1,5 +1,37 @@
 # Supabase schema changes for storing insights
 
+## performance_insights table (Ad Index)
+
+Used by `get-performance-insights` and `sync-meta-insights` to store Meta Ads performance data. The `roas` column is **computed in the sync job** as `purchase_value / spend` (when spend > 0); it is not read from the Meta API.
+
+If you need to create this table:
+
+```sql
+create table if not exists performance_insights (
+  ad_id text primary key,
+  account_id text,
+  name text,
+  spend numeric not null default 0,
+  impressions numeric not null default 0,
+  clicks numeric not null default 0,
+  cpm numeric not null default 0,
+  cpc numeric not null default 0,
+  ctr numeric not null default 0,
+  purchases numeric not null default 0,
+  purchase_value numeric not null default 0,
+  roas numeric,
+  currency text,
+  date_preset text,
+  fetched_at timestamptz
+);
+create index if not exists performance_insights_account_id_idx on performance_insights(account_id);
+create index if not exists performance_insights_spend_idx on performance_insights(spend);
+```
+
+---
+
+## ads table (Konkurrentanalyse)
+
 Run these SQL statements in Supabase (SQL editor):
 
 ```sql
