@@ -4,7 +4,7 @@ import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
-import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, checkScrapeStatus, SCRAPE_WAIT_TIME_SECONDS, fetchPerformanceData } from './services/adService';
+import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, checkScrapeStatus, SCRAPE_WAIT_TIME_SECONDS, fetchPerformanceInsights } from './services/adService';
 import { LayoutGrid, Target, Trophy, RefreshCw, Eye } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';
@@ -98,6 +98,14 @@ const App: React.FC = () => {
     if (!sessionId) return;
     loadData();
   }, [sessionId, loadData]);
+
+  useEffect(() => {
+    const loadPerfInsights = async () => {
+      const res = await fetchPerformanceInsights();
+      setPerformanceAds(res.ads || []);
+    };
+    loadPerfInsights();
+  }, []);
 
   useEffect(() => {
     const loadPerf = async () => {

@@ -131,6 +131,47 @@ export const fetchAdData = async (useRealUrl: boolean = true, sessionId?: string
   }
 };
 
+export const fetchPerformanceInsights = async (): Promise<{ ads: AdData[] }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/get-performance-insights`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`Failed to fetch performance insights: ${response.statusText}`);
+    const json = await response.json();
+    const mapped = (json.ads || []).map((ad: any) => ({
+      id: ad.ad_id || ad.id,
+      page_name: ad.name || ad.ad_id,
+      reach: ad.reach || 0,
+      ad_library_url: '',
+      video_url: '',
+      thumbnail: '',
+      heading: '',
+      ad_copy: '',
+      days_active: 0,
+      viral_score: 0,
+      brand_ad_library_url: '',
+      ad_id: ad.ad_id || ad.id,
+      spend: ad.spend,
+      impressions: ad.impressions,
+      clicks: ad.clicks,
+      cpm: ad.cpm,
+      cpc: ad.cpc,
+      ctr: ad.ctr,
+      roas: ad.roas,
+      purchases: ad.purchases,
+      purchase_value: ad.purchase_value,
+      insights_currency: ad.currency,
+      insights_date_preset: ad.date_preset,
+    }));
+    return { ads: mapped };
+  } catch (err) {
+    console.error('Error fetching performance insights', err);
+    return { ads: [] };
+  }
+};
+
 /**
  * Add a brand to the session
  */
@@ -228,18 +269,17 @@ export const refreshSessionScrape = async (sessionId: string): Promise<{ success
   }
 };
 
-export const fetchBrands = async (sessionId: string): Promise<any[]> => {
+export const fetchBrands = async (sessionId: string): Promise<{ brands: any[] }> => {
   try {
     const response = await fetch(`${API_BASE_URL}/get-brands?sessionId=${encodeURIComponent(sessionId)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
     if (!response.ok) throw new Error(`Failed to fetch brands: ${response.statusText}`);
-    const json = await response.json();
-    return Array.isArray(json) ? json : (json.brands || []);
+    return await response.json();
   } catch (err) {
     console.error('Error fetching brands', err);
-    return [];
+    return { brands: [] };
   }
 };
 
@@ -273,47 +313,5 @@ export const checkScrapeStatus = async (runId: string): Promise<{ status: string
   } catch (err) {
     console.error('Error checking scrape status', err);
     return { status: 'unknown' };
-  }
-};
-
-
-export const fetchPerformanceData = async (): Promise<{ ads: AdData[] }> => {
-  try {
-    const response = await fetch(`/api/get-ads-all`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
-    });
-    if (!response.ok) throw new Error(`Failed to fetch performance ads: ${response.statusText}`);
-    const json = await response.json();
-    const mapped = (json.ads || []).map((ad: any) => ({
-      id: ad.id,
-      page_name: ad.page_name,
-      reach: ad.reach,
-      ad_library_url: ad.ad_library_url,
-      video_url: ad.video_url || '',
-      thumbnail: ad.thumbnail_url || ad.thumbnail || '',
-      heading: ad.heading || '',
-      ad_copy: ad.ad_copy || '',
-      days_active: ad.days_active,
-      viral_score: ad.viral_score,
-      brand_ad_library_url: ad.brand_ad_library_url,
-      ad_id: ad.ad_id,
-      spend: ad.spend,
-      impressions: ad.impressions,
-      clicks: ad.clicks,
-      cpm: ad.cpm,
-      cpc: ad.cpc,
-      ctr: ad.ctr,
-      roas: ad.roas,
-      purchases: ad.purchases,
-      purchase_value: ad.purchase_value,
-      insights_currency: ad.insights_currency,
-      insights_date_preset: ad.insights_date_preset,
-    }));
-    return { ads: mapped };
-  } catch (err) {
-    console.error('Error fetching performance ads', err);
-    return { ads: [] };
   }
 };
