@@ -4,7 +4,7 @@ import AdCard from './components/AdCard';
 import ScrapeModal from './components/ScrapeModal';
 import ProgressModal from './components/ProgressModal';
 import { AdData, FilterState } from './types';
-import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, checkScrapeStatus, SCRAPE_WAIT_TIME_SECONDS, fetchPerformanceInsights } from './services/adService';
+import { fetchAdData, triggerScrapeWorkflow, refreshSessionScrape, checkScrapeStatus, SCRAPE_WAIT_TIME_SECONDS } from './services/adService';
 import { LayoutGrid, Target, Trophy, RefreshCw, Eye } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'poetype_session_id';
@@ -30,7 +30,6 @@ const PoetypeP: React.FC<{ className?: string }> = ({ className = '' }) => (
 
 const App: React.FC = () => {
   const [rawData, setRawData] = useState<AdData[]>([]);
-  const [performanceAds, setPerformanceAds] = useState<AdData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -51,7 +50,6 @@ const App: React.FC = () => {
     maxReach: 1000000, // Default max
     mediaType: 'all',
   });
-  const [viewMode, setViewMode] = useState<'client' | 'performance'>('client');
 
   useEffect(() => {
     try {
@@ -98,15 +96,6 @@ const App: React.FC = () => {
     if (!sessionId) return;
     loadData();
   }, [sessionId, loadData]);
-
-
-  useEffect(() => {
-    const loadPerf = async () => {
-      const res = await fetchPerformanceData();
-      setPerformanceAds(res.ads || []);
-    };
-    loadPerf();
-  }, []);
 
   const handleStartScrape = async (urls: string[]) => {
     if (!sessionId) {
@@ -332,11 +321,6 @@ const App: React.FC = () => {
   // Derived State: Stats
   const totalAds = filteredData.length;
   const totalReach = filteredData.reduce((sum, item) => sum + item.reach, 0);
-  const totalSpend = performanceAds.reduce((sum, item) => sum + (item.spend || 0), 0);
-  const avgRoas = performanceAds.length > 0 ? performanceAds.reduce((sum, item) => sum + (item.roas || 0), 0) / performanceAds.length : 0;
-  const totalImpressions = performanceAds.reduce((sum, item) => sum + (item.impressions || 0), 0);
-  const totalClicks = performanceAds.reduce((sum, item) => sum + (item.clicks || 0), 0);
-  const performanceList = [...performanceAds].sort((a, b) => (b.spend || 0) - (a.spend || 0));
 
   return (
     <div className="flex h-screen overflow-hidden text-stone-900">
@@ -356,7 +340,7 @@ const App: React.FC = () => {
       />
 
       {/* Filter Sidebar */}
-      {viewMode==='client' && (<Sidebar 
+      <Sidebar 
         allBrands={allBrands} 
         filters={filters} 
         setFilters={setFilters}
@@ -368,80 +352,10 @@ const App: React.FC = () => {
         }}
         refreshTrigger={brandsRefreshTrigger}
         rawData={rawData}
-      />)}
+      />
 
       {/* Main Content */}
-      <div className='w-full bg-white border-b border-[#EADFD8] px-6 py-3 flex justify-center gap-2'>
-        <button onClick={() => setViewMode('client')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='client' ? 'bg-[#0B1221] text-white' : 'text-stone-600 border border-[#EADFD8]'}`}>Konkurrentanalyse</button>
-        <button onClick={() => setViewMode('performance')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='performance' ? 'bg-[#0B1221] text-white' : 'text-stone-600 border border-[#EADFD8]'}`}>Performance</button>
-      </div>
       <main className="flex-1 overflow-y-auto bg-[#FFF2EB]">
-        {viewMode==='performance' && (
-          <div className='max-w-7xl mx-auto px-8 py-10 space-y-6'>
-            <div className='bg-white border border-[#EADFD8] rounded-2xl p-6 shadow-sm'>
-              <h3 className='text-xl font-semibold text-[#0B1221] mb-2'>Performance Overview</h3>
-              <p className='text-sm text-stone-500 mb-4'>Meta Insights (using configured ad accounts).</p>
-              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
-                <div className='rounded-xl border border-[#EADFD8] bg-[#FFF2EB] p-4'>
-                  <p className='text-xs uppercase tracking-wide text-stone-400 font-semibold'>Spend</p>
-                  <p className='text-xl font-semibold text-[#0B1221]'>DKK {totalSpend.toFixed(0)}</p>
-                </div>
-                <div className='rounded-xl border border-[#EADFD8] bg-white p-4'>
-                  <p className='text-xs uppercase tracking-wide text-stone-400 font-semibold'>Avg ROAS</p>
-                  <p className='text-xl font-semibold text-[#0B1221]'>{avgRoas.toFixed(2)}</p>
-                </div>
-                <div className='rounded-xl border border-[#EADFD8] bg-white p-4'>
-                  <p className='text-xs uppercase tracking-wide text-stone-400 font-semibold'>Impressions</p>
-                  <p className='text-xl font-semibold text-[#0B1221]'>{totalImpressions.toLocaleString('da-DK')}</p>
-                </div>
-                <div className='rounded-xl border border-[#EADFD8] bg-white p-4'>
-                  <p className='text-xs uppercase tracking-wide text-stone-400 font-semibold'>Clicks</p>
-                  <p className='text-xl font-semibold text-[#0B1221]'>{totalClicks.toLocaleString('da-DK')}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className='bg-white border border-[#EADFD8] rounded-2xl p-6 shadow-sm'>
-              <div className='flex items-center justify-between mb-4'>
-                <div>
-                  <h4 className='text-lg font-semibold text-[#0B1221]'>Top ads by spend</h4>
-                  <p className='text-sm text-stone-500'>Showing up to 20 ads with spend data.</p>
-                </div>
-              </div>
-              <div className='overflow-auto'>
-                <table className='min-w-full text-sm text-stone-700'>
-                  <thead>
-                    <tr className='text-left border-b border-[#EADFD8] text-stone-500'>
-                      <th className='py-2 pr-4'>Page</th>
-                      <th className='py-2 pr-4'>Spend</th>
-                      <th className='py-2 pr-4'>ROAS</th>
-                      <th className='py-2 pr-4'>Reach</th>
-                      <th className='py-2 pr-4'>Impressions</th>
-                      <th className='py-2 pr-4'>Clicks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {performanceList.slice(0,20).map((ad) => (
-                      <tr key={ad.id} className='border-b border-[#F5EBE6] hover:bg-[#FFF8F5]'>
-                        <td className='py-2 pr-4'>{ad.page_name}</td>
-                        <td className='py-2 pr-4'>DKK {(ad.spend || 0).toFixed(0)}</td>
-                        <td className='py-2 pr-4'>{(ad.roas || 0).toFixed(2)}</td>
-                        <td className='py-2 pr-4'>{(ad.reach || 0).toLocaleString('da-DK')}</td>
-                        <td className='py-2 pr-4'>{(ad.impressions || 0).toLocaleString('da-DK')}</td>
-                        <td className='py-2 pr-4'>{(ad.clicks || 0).toLocaleString('da-DK')}</td>
-                      </tr>
-                    ))}
-                    {performanceList.length === 0 && (
-                      <tr><td className='py-4 text-stone-400' colSpan={6}>No performance data yet.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {viewMode==='client' && (
         <div className="max-w-7xl mx-auto px-8 py-10">
           
           {/* Header */}
@@ -462,10 +376,6 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-3">
-              <div className='flex items-center gap-2 bg-white border border-[#EADFD8] rounded-full px-1 py-1'>
-                <button onClick={() => setViewMode('client')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='client' ? 'bg-[#0B1221] text-white' : 'text-stone-600'}`}>Konkurrentanalyse</button>
-                <button onClick={() => setViewMode('performance')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='performance' ? 'bg-[#0B1221] text-white' : 'text-stone-600'}`}>Performance</button>
-              </div>
               <button 
                 onClick={handleForceRefresh}
                 disabled={isRefreshing || isScraping}
@@ -485,13 +395,6 @@ const App: React.FC = () => {
             </div>
           </header>
 
-          {viewMode==='performance' && (
-            <div className='mb-8 p-4 bg-white border border-[#EADFD8] rounded-2xl shadow-sm'>
-              <h3 className='text-lg font-semibold text-[#0B1221] mb-2'>Performance (beta)</h3>
-              <p className='text-sm text-stone-500 mb-4'>Graphs and advanced filters coming. Showing current stats.</p>
-              {/* Reuse existing stats below */}
-            </div>
-          )}
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 animate-reveal" style={{ animationDelay: '200ms' }}>
             {/* Stat Card 1 */}
@@ -580,7 +483,6 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
-              )}
       </main>
     </div>
   );
