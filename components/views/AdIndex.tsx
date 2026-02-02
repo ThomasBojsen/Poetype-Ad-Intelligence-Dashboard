@@ -113,7 +113,7 @@ const AdIndex: React.FC = () => {
             until: dateEnd,
             accountOffset: offset,
             accountsPerBatch: 1,
-            maxAdsPerAccount: 20,
+            maxAdsPerAccount: 100,
           }),
         });
         const json = await res.json().catch(() => ({}));

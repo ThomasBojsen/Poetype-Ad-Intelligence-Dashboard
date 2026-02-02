@@ -51,39 +51,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     Math.max(Number(body.accountsPerBatch) || 1, 1),
     10
   );
-  const maxAdsPerAccount = Math.min(Math.max(Number(body.maxAdsPerAccount) || 20, 1), 50);
+  const maxAdsPerAccount = Math.min(Math.max(Number(body.maxAdsPerAccount) || 100, 1), 500);
 
   const accountsToProcess = metaAccounts.slice(accountOffset, accountOffset + accountsPerBatch);
   const errors: { account?: string; ad_id?: string; error: string }[] = [];
   let synced = 0;
   let adsListed = 0;
 
+  type AdItem = { id: string; name?: string; account_id?: string };
+  async function fetchAllAdsForAccount(actId: string): Promise<AdItem[]> {
+    const all: AdItem[] = [];
+    let url: string | null = `https://graph.facebook.com/${META_API_VERSION}/${actId}/ads?fields=id,name,account_id&limit=100&access_token=${metaToken}`;
+    while (url && all.length < maxAdsPerAccount) {
+      const resp = await fetch(url);
+      if (!resp.ok) return all;
+      const json = (await resp.json()) as {
+        data?: AdItem[];
+        error?: { message?: string };
+        paging?: { next?: string };
+      };
+      if (json.error) return all;
+      const page = json.data || [];
+      all.push(...page);
+      url = (json.paging?.next && page.length === 100) ? json.paging.next : null;
+    }
+    return all.slice(0, maxAdsPerAccount);
+  }
+
   for (const actId of accountsToProcess) {
     try {
-      const listUrl = new URL(`https://graph.facebook.com/${META_API_VERSION}/${actId}/ads`);
-      listUrl.searchParams.set('fields', 'id,name,account_id');
-      listUrl.searchParams.set('limit', String(maxAdsPerAccount));
-      listUrl.searchParams.set('access_token', metaToken);
-
-      const listResp = await fetch(listUrl.toString());
-      if (!listResp.ok) {
-        const txt = await listResp.text();
-        errors.push({ account: actId, error: `list failed ${listResp.status}: ${txt.slice(0, 300)}` });
-        continue;
-      }
-
-      const listJson = (await listResp.json()) as {
-        data?: { id: string; name?: string; account_id?: string }[];
-        error?: { message?: string; code?: number };
-      };
-      if (listJson.error) {
-        errors.push({
-          account: actId,
-          error: `Meta API: ${listJson.error.message || JSON.stringify(listJson.error)}`,
-        });
-        continue;
-      }
-      const ads = listJson.data || [];
+      const ads = await fetchAllAdsForAccount(actId);
       adsListed += ads.length;
 
       for (const ad of ads) {
@@ -126,32 +123,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               action_values?: { action_type?: string; value?: string | number }[];
             }>;
           };
-          const first = iJson?.data?.[0];
-          if (!first) {
+          const dataRows = iJson?.data || [];
+          if (dataRows.length === 0) {
             errors.push({ account: actId, ad_id: ad.id, error: 'no insights data' });
             continue;
           }
 
-          const spend = Math.max(0, Number(first.spend ?? 0));
-          const actions = first.actions ?? [];
-          const actionValues = first.action_values ?? [];
-          const purchases = sumPurchaseValue(actions);
-          const purchaseValue = sumPurchaseValue(actionValues);
+          let spend = 0;
+          let impressions = 0;
+          let clicks = 0;
+          let purchases = 0;
+          let purchaseValue = 0;
+          for (const row of dataRows) {
+            spend += Math.max(0, Number(row.spend ?? 0));
+            impressions += Math.max(0, Number(row.impressions ?? 0));
+            clicks += Math.max(0, Number(row.clicks ?? 0));
+            purchases += sumPurchaseValue(row.actions);
+            purchaseValue += sumPurchaseValue(row.action_values);
+          }
+
           const roas =
             spend > 0 && Number.isFinite(purchaseValue)
               ? purchaseValue / spend
               : null;
+
+          const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+          const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+          const cpc = clicks > 0 ? spend / clicks : 0;
 
           const row = {
             ad_id: ad.id,
             account_id: ad.account_id ?? actId,
             name: ad.name ?? null,
             spend,
-            impressions: Math.max(0, Number(first.impressions ?? 0)),
-            clicks: Math.max(0, Number(first.clicks ?? 0)),
-            cpm: Math.max(0, Number(first.cpm ?? 0)),
-            cpc: Math.max(0, Number(first.cpc ?? 0)),
-            ctr: Math.max(0, Number(first.ctr ?? 0)),
+            impressions,
+            clicks,
+            cpm,
+            cpc,
+            ctr,
             purchases,
             purchase_value: purchaseValue,
             roas,
