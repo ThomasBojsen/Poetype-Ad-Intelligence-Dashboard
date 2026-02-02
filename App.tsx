@@ -99,13 +99,6 @@ const App: React.FC = () => {
     loadData();
   }, [sessionId, loadData]);
 
-  useEffect(() => {
-    const loadPerfInsights = async () => {
-      const res = await fetchPerformanceInsights();
-      setPerformanceAds(res.ads || []);
-    };
-    loadPerfInsights();
-  }, []);
 
   useEffect(() => {
     const loadPerf = async () => {
