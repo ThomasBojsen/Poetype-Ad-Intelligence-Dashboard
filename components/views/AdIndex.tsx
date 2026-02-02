@@ -446,9 +446,14 @@ const AdIndex: React.FC = () => {
                             {sortKey === 'roas' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                           </button>
                         </th>
+                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Purchases</th>
+                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Purchase value</th>
+                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">CPM</th>
+                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">CPC</th>
                         <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">CTR</th>
                         <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Impressions</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 pl-4 pr-6 py-4">Clicks</th>
+                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Clicks</th>
+                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 pl-4 pr-6 py-4">Period</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -494,12 +499,27 @@ const AdIndex: React.FC = () => {
                                 {roasVal != null ? Number(roasVal).toFixed(2) : '—'}
                               </span>
                             </td>
+                            <td className="px-4 py-3 text-stone-700">
+                              {(row.purchases ?? 0).toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-stone-700">
+                              {formatCurrency(Number(row.purchase_value ?? 0))}
+                            </td>
+                            <td className="px-4 py-3 text-stone-700">
+                              {row.cpm != null ? Number(row.cpm).toFixed(2) : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-stone-700">
+                              {row.cpc != null ? Number(row.cpc).toFixed(2) : '—'}
+                            </td>
                             <td className="px-4 py-3 text-stone-700">{formatPct(row.ctr)}</td>
                             <td className="px-4 py-3 text-stone-700">
                               {(row.impressions ?? 0).toLocaleString()}
                             </td>
-                            <td className="pl-4 pr-6 py-3 text-stone-700">
+                            <td className="px-4 py-3 text-stone-700">
                               {(row.clicks ?? 0).toLocaleString()}
+                            </td>
+                            <td className="pl-4 pr-6 py-3 text-stone-500 text-xs whitespace-nowrap" title={row.insights_date_preset ?? undefined}>
+                              {row.insights_date_preset ?? '—'}
                             </td>
                           </tr>
                         );
