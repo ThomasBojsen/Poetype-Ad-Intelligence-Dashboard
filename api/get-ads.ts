@@ -37,12 +37,38 @@ function getSinglePurchaseMetric(arr: { action_type?: string; value?: string | n
   return 0;
 }
 
-function getOutboundClicks(first: any, actions: any[] | undefined): number {
-  const direct = Number(first?.outbound_clicks ?? 0);
-  if (Number.isFinite(direct) && direct > 0) return direct;
-  const item = (actions || []).find((a) => String(a?.action_type || '').toLowerCase() === 'outbound_click');
-  const val = item ? Number(item.value ?? 0) : 0;
-  return Number.isFinite(val) ? val : 0;
+function getClickCount(row: any): number {
+  const ob = row?.outbound_clicks;
+  if (ob != null) {
+    if (typeof ob === 'number' && Number.isFinite(ob)) return ob;
+    if (typeof ob === 'string') {
+      const n = Number(ob);
+      if (Number.isFinite(n)) return n;
+    }
+    if (Array.isArray(ob) && ob.length > 0) {
+      const v = ob[0]?.value ?? ob[0];
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  const item = (row?.actions || []).find((a: any) =>
+    ['outbound_click', 'link_click', 'inline_link_click'].includes(String(a?.action_type || '').toLowerCase())
+  );
+  if (item) {
+    const n = Number(item.value ?? 0);
+    if (Number.isFinite(n)) return n;
+  }
+  const inline = row?.inline_link_clicks;
+  if (inline != null) {
+    const n = typeof inline === 'number' ? inline : Number(inline);
+    if (Number.isFinite(n)) return n;
+  }
+  const clicks = row?.clicks;
+  if (clicks != null) {
+    const n = typeof clicks === 'number' ? clicks : Number(clicks);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
 }
 
 async function fetchInsightsForAds(
@@ -60,7 +86,7 @@ async function fetchInsightsForAds(
   for (const adId of uniqueIds) {
     try {
       const url = new URL(`https://graph.facebook.com/v19.0/${adId}/insights`);
-      url.searchParams.set('fields', 'spend,impressions,outbound_clicks,actions,action_values,purchase_roas,currency');
+      url.searchParams.set('fields', 'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,purchase_roas,currency');
       url.searchParams.set('date_preset', datePreset);
       url.searchParams.set('access_token', metaToken);
 
@@ -83,7 +109,7 @@ async function fetchInsightsForAds(
       const roas = roasArr && roasArr.length > 0 ? Number(roasArr[0].value || 0) : 0;
       const spend = Number(first.spend || 0);
       const impressions = Number(first.impressions || 0);
-      const outboundClicks = getOutboundClicks(first, actions);
+      const outboundClicks = getClickCount(first);
       const ctr = impressions > 0 ? (outboundClicks / impressions) * 100 : 0;
       const cpc = outboundClicks > 0 ? spend / outboundClicks : 0;
       const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;

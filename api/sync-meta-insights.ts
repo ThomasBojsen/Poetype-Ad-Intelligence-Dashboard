@@ -37,12 +37,45 @@ function getSinglePurchaseMetric(
   return 0;
 }
 
-function getOutboundClicksFromActions(arr: { action_type?: string; value?: string | number }[] | undefined): number {
-  if (!arr || !Array.isArray(arr)) return 0;
-  const item = arr.find((a) => String(a.action_type || '').toLowerCase() === 'outbound_click');
-  if (!item) return 0;
-  const val = Number(item.value ?? 0);
-  return Number.isFinite(val) ? val : 0;
+/** Extract outbound/link clicks from various Meta API response formats. Prefer outbound, fall back to link clicks. */
+function getClickCount(
+  row: {
+    outbound_clicks?: string | number | { value?: string | number }[];
+    inline_link_clicks?: string | number;
+    actions?: { action_type?: string; value?: string | number }[];
+  }
+): number {
+  const ob = row.outbound_clicks;
+  if (ob != null) {
+    if (typeof ob === 'number' && Number.isFinite(ob)) return ob;
+    if (typeof ob === 'string') {
+      const n = Number(ob);
+      if (Number.isFinite(n)) return n;
+    }
+    if (Array.isArray(ob) && ob.length > 0) {
+      const v = ob[0]?.value ?? ob[0];
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  const item = row.actions?.find((a) =>
+    ['outbound_click', 'link_click', 'inline_link_click'].includes(String(a.action_type || '').toLowerCase())
+  );
+  if (item) {
+    const n = Number(item.value ?? 0);
+    if (Number.isFinite(n)) return n;
+  }
+  const inline = row.inline_link_clicks;
+  if (inline != null) {
+    const n = typeof inline === 'number' ? inline : Number(inline);
+    if (Number.isFinite(n)) return n;
+  }
+  const clicks = row.clicks;
+  if (clicks != null) {
+    const n = typeof clicks === 'number' ? clicks : Number(clicks);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -111,7 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           insightsUrl.searchParams.set(
             'fields',
-            'spend,impressions,outbound_clicks,actions,action_values'
+            'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values'
           );
           if (useTimeRange) {
             insightsUrl.searchParams.set('time_range[since]', since);
@@ -136,7 +169,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             data?: Array<{
               spend?: string;
               impressions?: string;
-              outbound_clicks?: string;
+              outbound_clicks?: string | number | { value?: string | number }[];
+              inline_link_clicks?: string | number;
+              clicks?: string | number;
               actions?: { action_type?: string; value?: string | number }[];
               action_values?: { action_type?: string; value?: string | number }[];
             }>;
@@ -155,10 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           for (const row of dataRows) {
             spend += Math.max(0, Number(row.spend ?? 0));
             impressions += Math.max(0, Number(row.impressions ?? 0));
-            const rowOutbound = Number(row.outbound_clicks ?? 0);
-            outboundClicks += Number.isFinite(rowOutbound) && rowOutbound > 0
-              ? rowOutbound
-              : getOutboundClicksFromActions(row.actions);
+            outboundClicks += getClickCount(row);
             purchases += getSinglePurchaseMetric(row.actions);
             purchaseValue += getSinglePurchaseMetric(row.action_values);
           }
