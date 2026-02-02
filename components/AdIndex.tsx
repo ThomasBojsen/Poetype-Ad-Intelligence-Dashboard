@@ -19,10 +19,13 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 type SortKey = keyof PerformanceInsight | null;
 type SortDir = 'asc' | 'desc';
 
+type SyncStatus = { type: 'idle' } | { type: 'ok'; synced: number; message?: string } | { type: 'error'; message: string };
+
 const AdIndex: React.FC = () => {
   const [insights, setInsights] = useState<PerformanceInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ type: 'idle' });
   const [sortKey, setSortKey] = useState<SortKey>('spend');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
@@ -65,12 +68,30 @@ const AdIndex: React.FC = () => {
 
   const handleSync = async () => {
     setSyncing(true);
+    setSyncStatus({ type: 'idle' });
     try {
-      const res = await fetch(`${API_BASE_URL}/sync-meta-insights`, { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/sync-meta-insights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.success) {
+        const msg = json.message as string | undefined;
+        const errs = json.errors as { error: string }[] | undefined;
+        const firstError = Array.isArray(errs) && errs[0] ? errs[0].error : undefined;
+        setSyncStatus({
+          type: json.synced > 0 ? 'ok' : 'error',
+          synced: json.synced ?? 0,
+          message: msg || (firstError && `Sync: ${firstError}`) || (json.synced === 0 ? 'No ads synced. See message or check Vercel env (META_TOKEN, META_AD_ACCOUNTS).' : undefined),
+        });
         await loadInsights();
+      } else {
+        setSyncStatus({ type: 'error', message: (json.error as string) || res.statusText || 'Sync failed' });
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Network error';
+      setSyncStatus({ type: 'error', message: msg });
     } finally {
       setSyncing(false);
     }
@@ -156,15 +177,28 @@ const AdIndex: React.FC = () => {
             <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Ad Index</h1>
             <p className="text-sm text-stone-500 mt-0.5">Meta Ads performance from your connected accounts</p>
           </div>
-          <button
-            type="button"
-            onClick={handleSync}
-            disabled={syncing || loading}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-stone-900 text-white hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <RefreshCw size={16} strokeWidth={1.5} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Syncing...' : 'Sync from Meta'}
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={syncing || loading}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-stone-900 text-white hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw size={16} strokeWidth={1.5} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing...' : 'Sync from Meta'}
+            </button>
+            {syncStatus.type !== 'idle' && syncStatus.message && (
+              <p
+                className={`text-sm max-w-md text-right ${
+                  syncStatus.type === 'error' ? 'text-amber-700' : 'text-stone-600'
+                }`}
+              >
+                {syncStatus.type === 'ok' && syncStatus.synced > 0
+                  ? `Synced ${syncStatus.synced} ad(s).`
+                  : syncStatus.message}
+              </p>
+            )}
+          </div>
         </header>
 
         {loading ? (

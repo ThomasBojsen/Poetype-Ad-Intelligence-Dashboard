@@ -49,6 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const accountsToProcess = metaAccounts.slice(0, maxAccountsPerRun);
   const errors: { account?: string; ad_id?: string; error: string }[] = [];
   let synced = 0;
+  let adsListed = 0;
 
   for (const actId of accountsToProcess) {
     try {
@@ -60,12 +61,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const listResp = await fetch(listUrl.toString());
       if (!listResp.ok) {
         const txt = await listResp.text();
-        errors.push({ account: actId, error: `list failed ${listResp.status}: ${txt}` });
+        errors.push({ account: actId, error: `list failed ${listResp.status}: ${txt.slice(0, 300)}` });
         continue;
       }
 
-      const listJson = (await listResp.json()) as { data?: { id: string; name?: string; account_id?: string }[] };
+      const listJson = (await listResp.json()) as {
+        data?: { id: string; name?: string; account_id?: string }[];
+        error?: { message?: string; code?: number };
+      };
+      if (listJson.error) {
+        errors.push({
+          account: actId,
+          error: `Meta API: ${listJson.error.message || JSON.stringify(listJson.error)}`,
+        });
+        continue;
+      }
       const ads = listJson.data || [];
+      adsListed += ads.length;
 
       for (const ad of ads) {
         try {
@@ -161,10 +173,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  let message: string | undefined;
+  if (synced > 0) {
+    message = `Synced ${synced} ad(s).`;
+  } else if (errors.length > 0) {
+    message = errors[0].error;
+  } else if (adsListed === 0) {
+    message =
+      'Meta API returned 0 ads. Check META_AD_ACCOUNTS (e.g. act_123) and token permissions (ads_read).';
+  }
+
   return res.status(200).json({
     success: true,
     synced,
     datePreset,
+    ...(message && { message }),
     ...(errors.length > 0 && { errors }),
   });
 }
