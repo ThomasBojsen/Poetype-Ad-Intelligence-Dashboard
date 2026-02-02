@@ -50,7 +50,6 @@ const App: React.FC = () => {
     maxReach: 1000000, // Default max
     mediaType: 'all',
   });
-  const [viewMode, setViewMode] = useState<'client' | 'performance'>('client');
 
   useEffect(() => {
     try {
@@ -324,7 +323,7 @@ const App: React.FC = () => {
   const totalReach = filteredData.reduce((sum, item) => sum + item.reach, 0);
 
   return (
-    <div className="flex h-screen overflow-hidden text-stone-900" data-version="v-clean">
+    <div className="flex h-screen overflow-hidden text-stone-900">
       
       {/* Progress Modal (Popup instead of Full Screen) - Only show for Flow A */}
       <ProgressModal 
@@ -341,7 +340,7 @@ const App: React.FC = () => {
       />
 
       {/* Filter Sidebar */}
-      {viewMode==='client' && (<Sidebar 
+      <Sidebar 
         allBrands={allBrands} 
         filters={filters} 
         setFilters={setFilters}
@@ -353,40 +352,24 @@ const App: React.FC = () => {
         }}
         refreshTrigger={brandsRefreshTrigger}
         rawData={rawData}
-      />)}
+      />
 
-      <div className='w-full bg-white border-b border-[#EADFD8] px-6 py-3 flex items-center justify-start gap-6 text-sm font-medium text-stone-600'>
-        <button onClick={() => setViewMode('client')} className={`pb-1 ${viewMode==='client' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Konkurrentanalyse</button>
-        <button onClick={() => setViewMode('performance')} className={`pb-1 ${viewMode==='performance' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Performance</button>
-      </div>
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-[#FFF2EB]">
-        {viewMode==='performance' && (
-          <div className='max-w-5xl mx-auto px-8 py-10 space-y-4'>
-            <h3 className='text-2xl font-semibold text-[#0B1221]'>Performance</h3>
-            <p className='text-sm text-stone-600'>This view will show spend/ROAS once cached insights are available. Currently showing placeholder.</p>
-            <div className='bg-white border border-[#EADFD8] rounded-xl p-4 text-stone-600'>No performance data loaded.</div>
-          </div>
-        )}
-        {viewMode==='client' && (
         <div className="max-w-7xl mx-auto px-8 py-10">
           
           {/* Header */}
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 animate-reveal" style={{ animationDelay: '100ms' }}>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
                 <div className="text-[#D6453D]">
                   <Trophy size={28} strokeWidth={1.5} />
                 </div>
                 <h2 className="text-3xl font-semibold tracking-tight text-[#0B1221]">Top Præsterende Annoncer</h2>
               </div>
-              <div className='flex items-center gap-4 text-sm font-medium text-stone-600'>
-                <button onClick={() => setViewMode('client')} className={`pb-1 ${viewMode==='client' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Konkurrentanalyse</button>
-                <button onClick={() => setViewMode('performance')} className={`pb-1 ${viewMode==='performance' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Performance</button>
-              </div>
-              <p className="text-lg text-stone-500 font-medium">Live indsigt i de bedst præsterende annoncer</p>
+              <p className="text-lg pl-10 text-stone-500 font-medium">Live indsigt i de bedst præsterende annoncer</p>
               {lastUpdated && (
-                <p className="text-sm text-stone-400 mt-1">
+                <p className="text-sm pl-10 text-stone-400 mt-1">
                   Sidst opdateret: {new Date(lastUpdated).toLocaleString('da-DK')}
                 </p>
               )}
@@ -500,7 +483,6 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
-              )}
       </main>
     </div>
   );
