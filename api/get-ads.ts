@@ -46,6 +46,16 @@ function getClickCount(row: any): number {
       if (Number.isFinite(n)) return n;
     }
     if (Array.isArray(ob) && ob.length > 0) {
+      const outboundItems = ob.filter((a: any) =>
+        String(a?.action_type || '').toLowerCase().includes('outbound')
+      );
+      const toSum = outboundItems.length > 0 ? outboundItems : ob;
+      const sum = toSum.reduce((acc: number, a: any) => {
+        const v = a?.value ?? a;
+        const n = typeof v === 'number' ? v : Number(v);
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0);
+      if (sum > 0) return sum;
       const v = ob[0]?.value ?? ob[0];
       const n = Number(v);
       if (Number.isFinite(n)) return n;
@@ -88,6 +98,7 @@ async function fetchInsightsForAds(
       const url = new URL(`https://graph.facebook.com/v19.0/${adId}/insights`);
       url.searchParams.set('fields', 'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,purchase_roas,currency');
       url.searchParams.set('date_preset', datePreset);
+      url.searchParams.set('action_attribution_windows', '["28d_click"]');
       url.searchParams.set('access_token', metaToken);
 
       const resp = await fetch(url.toString());

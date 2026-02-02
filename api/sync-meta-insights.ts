@@ -40,8 +40,9 @@ function getSinglePurchaseMetric(
 /** Extract outbound/link clicks from various Meta API response formats. Prefer outbound, fall back to link clicks. */
 function getClickCount(
   row: {
-    outbound_clicks?: string | number | { value?: string | number }[];
+    outbound_clicks?: string | number | Array<{ action_type?: string; value?: string | number }>;
     inline_link_clicks?: string | number;
+    clicks?: string | number;
     actions?: { action_type?: string; value?: string | number }[];
   }
 ): number {
@@ -53,8 +54,18 @@ function getClickCount(
       if (Number.isFinite(n)) return n;
     }
     if (Array.isArray(ob) && ob.length > 0) {
-      const v = ob[0]?.value ?? ob[0];
-      const n = Number(v);
+      const outboundItems = ob.filter((a) =>
+        String(a?.action_type || '').toLowerCase().includes('outbound')
+      );
+      const toSum = outboundItems.length > 0 ? outboundItems : ob;
+      const sum = toSum.reduce((acc, a) => {
+        const v = a?.value ?? (a as any);
+        const n = typeof v === 'number' ? v : Number(v);
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0);
+      if (sum > 0) return sum;
+      const v = ob[0]?.value ?? (ob[0] as any);
+      const n = typeof v === 'number' ? v : Number(v);
       if (Number.isFinite(n)) return n;
     }
   }
@@ -152,6 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           } else {
             insightsUrl.searchParams.set('date_preset', datePreset);
           }
+          insightsUrl.searchParams.set('action_attribution_windows', '["28d_click"]');
           insightsUrl.searchParams.set('access_token', metaToken);
 
           const iResp = await fetch(insightsUrl.toString());
