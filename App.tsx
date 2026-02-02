@@ -323,7 +323,7 @@ const App: React.FC = () => {
   const totalReach = filteredData.reduce((sum, item) => sum + item.reach, 0);
 
   return (
-    <div className="flex h-screen overflow-hidden text-stone-900">
+    <div className="flex h-screen overflow-hidden text-stone-900" data-version="v-clean">
       
       {/* Progress Modal (Popup instead of Full Screen) - Only show for Flow A */}
       <ProgressModal 
