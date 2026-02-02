@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           insightsUrl.searchParams.set(
             'fields',
-            'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values,currency'
+            'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values'
           );
           insightsUrl.searchParams.set('date_preset', datePreset);
           insightsUrl.searchParams.set('access_token', metaToken);
@@ -110,7 +110,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               cpm?: string;
               cpc?: string;
               ctr?: string;
-              currency?: string;
               actions?: { action_type?: string; value?: string | number }[];
               action_values?: { action_type?: string; value?: string | number }[];
             }>;
@@ -144,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             purchases,
             purchase_value: purchaseValue,
             roas,
-            currency: first.currency ?? null,
+            currency: null,
             date_preset: datePreset,
             fetched_at: new Date().toISOString(),
           };
