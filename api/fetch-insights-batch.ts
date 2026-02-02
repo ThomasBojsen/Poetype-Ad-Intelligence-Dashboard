@@ -16,6 +16,14 @@ function getSinglePurchaseMetric(arr: { action_type?: string; value?: string | n
   }
   return 0;
 }
+
+function getOutboundClicks(first: any, actions: any[] | undefined): number {
+  const direct = Number(first?.outbound_clicks ?? 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const item = (actions || []).find((a) => String(a?.action_type || '').toLowerCase() === 'outbound_click');
+  const val = item ? Number(item.value ?? 0) : 0;
+  return Number.isFinite(val) ? val : 0;
+}
 const metaAccountsEnv = process.env.META_AD_ACCOUNTS || '';
 const metaAccounts = metaAccountsEnv.split(',').map(s => s.trim()).filter(Boolean);
 
@@ -53,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       for (const ad of ads) {
         const insightsUrl = new URL(`https://graph.facebook.com/v19.0/${ad.id}/insights`);
-        insightsUrl.searchParams.set('fields', 'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values,purchase_roas,currency');
+        insightsUrl.searchParams.set('fields', 'spend,impressions,outbound_clicks,actions,action_values,purchase_roas,currency');
         insightsUrl.searchParams.set('date_preset', datePreset);
         insightsUrl.searchParams.set('access_token', metaToken);
         const iResp = await fetch(insightsUrl.toString());
@@ -73,17 +81,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const purchaseRoas = first.purchase_roas && first.purchase_roas.length > 0 ? Number(first.purchase_roas[0].value || 0) : 0;
         const purchases = getSinglePurchaseMetric(actions);
         const purchaseValue = getSinglePurchaseMetric(actionValues);
+        const spend = Number(first.spend || 0);
+        const impressions = Number(first.impressions || 0);
+        const outboundClicks = getOutboundClicks(first, actions);
+        const ctr = impressions > 0 ? (outboundClicks / impressions) * 100 : 0;
+        const cpc = outboundClicks > 0 ? spend / outboundClicks : 0;
+        const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
 
         const row = {
           ad_id: ad.id,
           account_id: ad.account_id,
           name: ad.name,
-          spend: Number(first.spend || 0),
-          impressions: Number(first.impressions || 0),
-          clicks: Number(first.clicks || 0),
-          cpm: Number(first.cpm || 0),
-          cpc: Number(first.cpc || 0),
-          ctr: Number(first.ctr || 0),
+          spend,
+          impressions,
+          clicks: outboundClicks,
+          cpm,
+          cpc,
+          ctr,
           purchases,
           purchase_value: purchaseValue,
           roas: purchaseRoas,

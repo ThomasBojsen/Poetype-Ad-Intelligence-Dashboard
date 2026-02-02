@@ -31,6 +31,14 @@ function getSinglePurchaseMetric(arr: { action_type?: string; value?: string | n
   return 0;
 }
 
+function getOutboundClicks(first: any, actions: any[] | undefined): number {
+  const direct = Number(first?.outbound_clicks ?? 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const item = (actions || []).find((a) => String(a?.action_type || '').toLowerCase() === 'outbound_click');
+  const val = item ? Number(item.value ?? 0) : 0;
+  return Number.isFinite(val) ? val : 0;
+}
+
 async function fetchInsightsForAds(adIds: string[], datePreset: string): Promise<Record<string, any>> {
   if (!metaToken || metaAccounts.length === 0) {
     console.warn('META_TOKEN or META_AD_ACCOUNTS missing; skipping insights');
@@ -43,7 +51,7 @@ async function fetchInsightsForAds(adIds: string[], datePreset: string): Promise
   for (const adId of uniqueIds) {
     try {
       const url = new URL(`https://graph.facebook.com/v19.0/${adId}/insights`);
-      url.searchParams.set('fields', 'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values,purchase_roas,currency');
+      url.searchParams.set('fields', 'spend,impressions,outbound_clicks,actions,action_values,purchase_roas,currency');
       url.searchParams.set('date_preset', datePreset);
       url.searchParams.set('access_token', metaToken);
 
@@ -64,14 +72,20 @@ async function fetchInsightsForAds(adIds: string[], datePreset: string): Promise
       const purchases = getSinglePurchaseMetric(actions);
       const purchaseValue = getSinglePurchaseMetric(actionValues);
       const roas = roasArr && roasArr.length > 0 ? Number(roasArr[0].value || 0) : 0;
+      const spend = Number(first.spend || 0);
+      const impressions = Number(first.impressions || 0);
+      const outboundClicks = getOutboundClicks(first, actions);
+      const ctr = impressions > 0 ? (outboundClicks / impressions) * 100 : 0;
+      const cpc = outboundClicks > 0 ? spend / outboundClicks : 0;
+      const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
 
       insightsMap[adId] = {
-        spend: Number(first.spend || 0),
-        impressions: Number(first.impressions || 0),
-        clicks: Number(first.clicks || 0),
-        cpm: Number(first.cpm || 0),
-        cpc: Number(first.cpc || 0),
-        ctr: Number(first.ctr || 0),
+        spend,
+        impressions,
+        clicks: outboundClicks,
+        cpm,
+        cpc,
+        ctr,
         roas,
         purchases,
         purchase_value: purchaseValue,

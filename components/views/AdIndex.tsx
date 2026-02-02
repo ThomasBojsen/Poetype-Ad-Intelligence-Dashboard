@@ -211,7 +211,7 @@ const AdIndex: React.FC = () => {
     { label: 'Total Spend', value: formatCurrency(totalSpend), icon: DollarSign },
     { label: 'Global ROAS', value: globalRoas.toFixed(2), icon: TrendingUp },
     { label: 'Total Impressions', value: totalImpressions.toLocaleString(), icon: Eye },
-    { label: 'Total Clicks', value: totalClicks.toLocaleString(), icon: MousePointer },
+    { label: 'Outbound Clicks', value: totalClicks.toLocaleString(), icon: MousePointer },
   ];
 
   return (
@@ -452,7 +452,7 @@ const AdIndex: React.FC = () => {
                         <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">CPC</th>
                         <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">CTR</th>
                         <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Impressions</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Clicks</th>
+                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Outbound Clicks</th>
                         <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 pl-4 pr-6 py-4">Period</th>
                       </tr>
                     </thead>

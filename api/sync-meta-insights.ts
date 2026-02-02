@@ -37,6 +37,14 @@ function getSinglePurchaseMetric(
   return 0;
 }
 
+function getOutboundClicksFromActions(arr: { action_type?: string; value?: string | number }[] | undefined): number {
+  if (!arr || !Array.isArray(arr)) return 0;
+  const item = arr.find((a) => String(a.action_type || '').toLowerCase() === 'outbound_click');
+  if (!item) return 0;
+  const val = Number(item.value ?? 0);
+  return Number.isFinite(val) ? val : 0;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -103,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           insightsUrl.searchParams.set(
             'fields',
-            'spend,impressions,clicks,cpm,cpc,ctr,actions,action_values'
+            'spend,impressions,outbound_clicks,actions,action_values'
           );
           if (useTimeRange) {
             insightsUrl.searchParams.set('time_range[since]', since);
@@ -128,10 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             data?: Array<{
               spend?: string;
               impressions?: string;
-              clicks?: string;
-              cpm?: string;
-              cpc?: string;
-              ctr?: string;
+              outbound_clicks?: string;
               actions?: { action_type?: string; value?: string | number }[];
               action_values?: { action_type?: string; value?: string | number }[];
             }>;
@@ -144,13 +149,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           let spend = 0;
           let impressions = 0;
-          let clicks = 0;
+          let outboundClicks = 0;
           let purchases = 0;
           let purchaseValue = 0;
           for (const row of dataRows) {
             spend += Math.max(0, Number(row.spend ?? 0));
             impressions += Math.max(0, Number(row.impressions ?? 0));
-            clicks += Math.max(0, Number(row.clicks ?? 0));
+            const rowOutbound = Number(row.outbound_clicks ?? 0);
+            outboundClicks += Number.isFinite(rowOutbound) && rowOutbound > 0
+              ? rowOutbound
+              : getOutboundClicksFromActions(row.actions);
             purchases += getSinglePurchaseMetric(row.actions);
             purchaseValue += getSinglePurchaseMetric(row.action_values);
           }
@@ -160,9 +168,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ? purchaseValue / spend
               : null;
 
-          const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+          const ctr = impressions > 0 ? (outboundClicks / impressions) * 100 : 0;
           const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
-          const cpc = clicks > 0 ? spend / clicks : 0;
+          const cpc = outboundClicks > 0 ? spend / outboundClicks : 0;
 
           const row = {
             ad_id: ad.id,
@@ -170,7 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             name: ad.name ?? null,
             spend,
             impressions,
-            clicks,
+            clicks: outboundClicks,
             cpm,
             cpc,
             ctr,

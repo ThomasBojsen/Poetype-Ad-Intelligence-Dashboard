@@ -128,7 +128,7 @@ const AdIndex: React.FC = () => {
       icon: <Eye size={22} strokeWidth={1.5} />,
     },
     {
-      label: 'Clicks',
+      label: 'Outbound Clicks',
       value: formatNum(totalClicks),
       icon: <MousePointer size={22} strokeWidth={1.5} />,
     },
@@ -240,7 +240,7 @@ const AdIndex: React.FC = () => {
                         <Th label="Account" sortKeyName="account_id" className="px-4 py-4" />
                         <Th label="Spend" sortKeyName="spend" className="px-4 py-4" />
                         <Th label="Impressions" sortKeyName="impressions" className="px-4 py-4" />
-                        <Th label="Clicks" sortKeyName="clicks" className="px-4 py-4" />
+                        <Th label="Outbound Clicks" sortKeyName="clicks" className="px-4 py-4" />
                         <Th label="ROAS" sortKeyName="roas" className="px-4 py-4" />
                         <Th label="Purchases" sortKeyName="purchases" className="px-4 py-4" />
                         <Th label="Purchase Value" sortKeyName="purchase_value" className="px-4 py-4" />
