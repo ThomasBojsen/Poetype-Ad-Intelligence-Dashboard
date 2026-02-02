@@ -22,6 +22,7 @@ export interface AdData {
   purchase_value?: number | null;
   insights_currency?: string | null;
   insights_date_preset?: string | null;
+  account_id?: string | null;
 }
 
 export interface FilterState {

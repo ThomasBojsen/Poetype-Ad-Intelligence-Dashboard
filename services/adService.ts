@@ -164,6 +164,7 @@ export const fetchPerformanceInsights = async (): Promise<{ ads: AdData[] }> => 
       purchase_value: ad.purchase_value,
       insights_currency: ad.currency,
       insights_date_preset: ad.date_preset,
+      account_id: ad.account_id ?? null,
     }));
     return { ads: mapped };
   } catch (err) {

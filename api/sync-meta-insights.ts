@@ -43,8 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = typeof req.body === 'object' ? req.body : {};
   const datePreset = (body.datePreset as string) || 'last_7d';
-  const maxAccountsPerRun = Math.min(Math.max(Number(body.maxAccountsPerRun) || 1, 1), 5);
-  const maxAdsPerAccount = Math.min(Math.max(Number(body.maxAdsPerAccount) || 15, 1), 30);
+  const maxAccountsPerRun = Math.min(
+    Math.max(Number(body.maxAccountsPerRun) || metaAccounts.length, 1),
+    50
+  );
+  const maxAdsPerAccount = Math.min(Math.max(Number(body.maxAdsPerAccount) || 20, 1), 50);
 
   const accountsToProcess = metaAccounts.slice(0, maxAccountsPerRun);
   const errors: { account?: string; ad_id?: string; error: string }[] = [];
