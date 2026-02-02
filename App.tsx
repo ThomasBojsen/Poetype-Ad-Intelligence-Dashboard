@@ -355,7 +355,7 @@ const App: React.FC = () => {
         rawData={rawData}
       />)}
 
-      <div className='w-full bg-white border-b border-[#EADFD8] px-6 py-3 flex items-center justify-center gap-6 text-sm font-medium text-stone-600'>
+      <div className='w-full bg-white border-b border-[#EADFD8] px-6 py-3 flex items-center justify-start gap-6 text-sm font-medium text-stone-600'>
         <button onClick={() => setViewMode('client')} className={`pb-1 ${viewMode==='client' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Konkurrentanalyse</button>
         <button onClick={() => setViewMode('performance')} className={`pb-1 ${viewMode==='performance' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Performance</button>
       </div>
