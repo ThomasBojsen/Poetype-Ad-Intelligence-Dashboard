@@ -50,6 +50,7 @@ const App: React.FC = () => {
     maxReach: 1000000, // Default max
     mediaType: 'all',
   });
+  const [viewMode, setViewMode] = useState<'client' | 'performance'>('client');
 
   useEffect(() => {
     try {
@@ -340,7 +341,7 @@ const App: React.FC = () => {
       />
 
       {/* Filter Sidebar */}
-      <Sidebar 
+      {viewMode==='client' && (<Sidebar 
         allBrands={allBrands} 
         filters={filters} 
         setFilters={setFilters}
@@ -352,10 +353,22 @@ const App: React.FC = () => {
         }}
         refreshTrigger={brandsRefreshTrigger}
         rawData={rawData}
-      />
+      />)}
 
+      <div className='w-full bg-white border-b border-[#EADFD8] px-6 py-3 flex justify-center gap-2'>
+        <button onClick={() => setViewMode('client')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='client' ? 'bg-[#0B1221] text-white' : 'text-stone-600 border border-[#EADFD8]'}`}>Konkurrentanalyse</button>
+        <button onClick={() => setViewMode('performance')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='performance' ? 'bg-[#0B1221] text-white' : 'text-stone-600 border border-[#EADFD8]'}`}>Performance</button>
+      </div>
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-[#FFF2EB]">
+        {viewMode==='performance' && (
+          <div className='max-w-5xl mx-auto px-8 py-10 space-y-4'>
+            <h3 className='text-2xl font-semibold text-[#0B1221]'>Performance</h3>
+            <p className='text-sm text-stone-600'>This view will show spend/ROAS once cached insights are available. Currently showing placeholder.</p>
+            <div className='bg-white border border-[#EADFD8] rounded-xl p-4 text-stone-600'>No performance data loaded.</div>
+          </div>
+        )}
+        {viewMode==='client' && (
         <div className="max-w-7xl mx-auto px-8 py-10">
           
           {/* Header */}
@@ -483,6 +496,7 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
+              )}
       </main>
     </div>
   );
