@@ -373,16 +373,20 @@ const App: React.FC = () => {
           
           {/* Header */}
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 animate-reveal" style={{ animationDelay: '100ms' }}>
-            <div>
-              <div className="flex items-center gap-3 mb-2">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
                 <div className="text-[#D6453D]">
                   <Trophy size={28} strokeWidth={1.5} />
                 </div>
                 <h2 className="text-3xl font-semibold tracking-tight text-[#0B1221]">Top Præsterende Annoncer</h2>
               </div>
-              <p className="text-lg pl-10 text-stone-500 font-medium">Live indsigt i de bedst præsterende annoncer</p>
+              <div className='flex items-center gap-4 text-sm font-medium text-stone-600'>
+                <button onClick={() => setViewMode('client')} className={`pb-1 ${viewMode==='client' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Konkurrentanalyse</button>
+                <button onClick={() => setViewMode('performance')} className={`pb-1 ${viewMode==='performance' ? 'text-[#0B1221] border-b-2 border-[#0B1221]' : 'border-b-2 border-transparent'}`}>Performance</button>
+              </div>
+              <p className="text-lg text-stone-500 font-medium">Live indsigt i de bedst præsterende annoncer</p>
               {lastUpdated && (
-                <p className="text-sm pl-10 text-stone-400 mt-1">
+                <p className="text-sm text-stone-400 mt-1">
                   Sidst opdateret: {new Date(lastUpdated).toLocaleString('da-DK')}
                 </p>
               )}
