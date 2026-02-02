@@ -378,6 +378,10 @@ const App: React.FC = () => {
       />)}
 
       {/* Main Content */}
+      <div className='w-full bg-white border-b border-[#EADFD8] px-6 py-3 flex justify-center gap-2'>
+        <button onClick={() => setViewMode('client')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='client' ? 'bg-[#0B1221] text-white' : 'text-stone-600 border border-[#EADFD8]'}`}>Konkurrentanalyse</button>
+        <button onClick={() => setViewMode('performance')} className={`px-3 py-1 text-sm rounded-full ${viewMode==='performance' ? 'bg-[#0B1221] text-white' : 'text-stone-600 border border-[#EADFD8]'}`}>Performance</button>
+      </div>
       <main className="flex-1 overflow-y-auto bg-[#FFF2EB]">
         {viewMode==='performance' && (
           <div className='max-w-7xl mx-auto px-8 py-10 space-y-6'>
