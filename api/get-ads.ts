@@ -22,19 +22,19 @@ function parseAdIdFromUrl(url?: string | null): string | null {
   return match ? match[1] : null;
 }
 
-function reduceActions<T extends { action_type?: string; value?: string | number; }>(
-  arr: T[] | undefined,
-  predicate: (action: T) => boolean,
-  extractor: (action: T) => number,
-): number {
+/** Meta returns the same conversion under multiple action types. Use only one to avoid 2-3x overcounting. */
+const PURCHASE_ACTION_PRIORITY = ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'];
+
+function getSinglePurchaseMetric(arr: { action_type?: string; value?: string | number }[] | undefined): number {
   if (!arr || !Array.isArray(arr)) return 0;
-  return arr.reduce((sum, action) => {
-    if (predicate(action)) {
-      const val = extractor(action);
-      return sum + (isNaN(val) ? 0 : val);
+  for (const t of PURCHASE_ACTION_PRIORITY) {
+    const item = arr.find((a) => String(a.action_type || '').toLowerCase() === t);
+    if (item) {
+      const val = Number(item.value ?? 0);
+      return Number.isFinite(val) ? val : 0;
     }
-    return sum;
-  }, 0);
+  }
+  return 0;
 }
 
 async function fetchInsightsForAds(
@@ -70,8 +70,8 @@ async function fetchInsightsForAds(
       const actionValues = first.action_values as any[] | undefined;
       const roasArr = first.roas as any[] | undefined;
 
-      const purchases = reduceActions(actions, a => a.action_type?.includes('purchase'), a => Number(a.value || 0));
-      const purchaseValue = reduceActions(actionValues, a => a.action_type?.includes('purchase'), a => Number(a.value || 0));
+      const purchases = getSinglePurchaseMetric(actions);
+      const purchaseValue = getSinglePurchaseMetric(actionValues);
       const roas = roasArr && roasArr.length > 0 ? Number(roasArr[0].value || 0) : 0;
 
       insightsMap[adId] = {

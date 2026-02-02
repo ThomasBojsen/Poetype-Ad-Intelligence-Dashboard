@@ -12,16 +12,29 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-function sumPurchaseValue(
+/**
+ * Meta returns the same conversion under multiple action types (purchase, omni_purchase,
+ * offsite_conversion.fb_pixel_purchase). Summing all causes 2-3x overcounting.
+ * Use only ONE canonical type, in priority order.
+ */
+const PURCHASE_ACTION_PRIORITY = [
+  'omni_purchase',
+  'offsite_conversion.fb_pixel_purchase',
+  'purchase',
+];
+
+function getSinglePurchaseMetric(
   arr: { action_type?: string; value?: string | number }[] | undefined
 ): number {
   if (!arr || !Array.isArray(arr)) return 0;
-  return arr.reduce((sum, item) => {
-    const type = String(item.action_type || '');
-    if (!type.toLowerCase().includes('purchase')) return sum;
-    const val = Number(item.value ?? 0);
-    return sum + (Number.isFinite(val) ? val : 0);
-  }, 0);
+  for (const canonicalType of PURCHASE_ACTION_PRIORITY) {
+    const item = arr.find((a) => String(a.action_type || '').toLowerCase() === canonicalType);
+    if (item) {
+      const val = Number(item.value ?? 0);
+      return Number.isFinite(val) ? val : 0;
+    }
+  }
+  return 0;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -138,8 +151,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             spend += Math.max(0, Number(row.spend ?? 0));
             impressions += Math.max(0, Number(row.impressions ?? 0));
             clicks += Math.max(0, Number(row.clicks ?? 0));
-            purchases += sumPurchaseValue(row.actions);
-            purchaseValue += sumPurchaseValue(row.action_values);
+            purchases += getSinglePurchaseMetric(row.actions);
+            purchaseValue += getSinglePurchaseMetric(row.action_values);
           }
 
           const roas =

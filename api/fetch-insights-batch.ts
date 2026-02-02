@@ -1,6 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const metaToken = process.env.META_TOKEN;
+
+/** Meta returns the same conversion under multiple action types. Use only one to avoid 2-3x overcounting. */
+const PURCHASE_ACTION_PRIORITY = ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'];
+
+function getSinglePurchaseMetric(arr: { action_type?: string; value?: string | number }[] | undefined): number {
+  if (!arr || !Array.isArray(arr)) return 0;
+  for (const t of PURCHASE_ACTION_PRIORITY) {
+    const item = arr.find((a) => String(a.action_type || '').toLowerCase() === t);
+    if (item) {
+      const val = Number(item.value ?? 0);
+      return Number.isFinite(val) ? val : 0;
+    }
+  }
+  return 0;
+}
 const metaAccountsEnv = process.env.META_AD_ACCOUNTS || '';
 const metaAccounts = metaAccountsEnv.split(',').map(s => s.trim()).filter(Boolean);
 
@@ -56,8 +71,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const actions = first.actions || [];
         const actionValues = first.action_values || [];
         const purchaseRoas = first.purchase_roas && first.purchase_roas.length > 0 ? Number(first.purchase_roas[0].value || 0) : 0;
-        const purchases = actions.filter((a:any)=>String(a.action_type||'').includes('purchase')).reduce((s:number,a:any)=>s+Number(a.value||0),0);
-        const purchaseValue = actionValues.filter((a:any)=>String(a.action_type||'').includes('purchase')).reduce((s:number,a:any)=>s+Number(a.value||0),0);
+        const purchases = getSinglePurchaseMetric(actions);
+        const purchaseValue = getSinglePurchaseMetric(actionValues);
 
         const row = {
           ad_id: ad.id,
