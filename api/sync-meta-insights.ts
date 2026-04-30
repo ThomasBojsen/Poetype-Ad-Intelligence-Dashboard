@@ -87,10 +87,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return all.slice(0, maxAdsPerAccount);
   }
 
+  /**
+   * Marketing API's creative.thumbnail_url returns a low-res default. The video
+   * object's `picture` field returns a full-resolution auto-generated cover
+   * (typically 1280x720+). One batched call handles up to 50 videos at a time.
+   */
+  async function fetchVideoPictures(videoIds: string[]): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    if (videoIds.length === 0 || !metaToken) return map;
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
+      const chunk = videoIds.slice(i, i + BATCH_SIZE);
+      const batch = chunk.map((id) => ({
+        method: 'GET',
+        relative_url: `${id}?fields=picture`,
+      }));
+      try {
+        const resp = await fetch(`https://graph.facebook.com/${META_API_VERSION}/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `access_token=${encodeURIComponent(metaToken)}&batch=${encodeURIComponent(
+            JSON.stringify(batch)
+          )}`,
+        });
+        if (!resp.ok) continue;
+        const results = (await resp.json()) as Array<{ code?: number; body?: string } | null>;
+        for (let j = 0; j < chunk.length; j++) {
+          const r = results[j];
+          if (r?.code === 200 && r.body) {
+            try {
+              const body = JSON.parse(r.body) as { picture?: string };
+              if (body.picture) map.set(chunk[j], body.picture);
+            } catch {
+              /* skip malformed item */
+            }
+          }
+        }
+      } catch {
+        /* fallbacks still apply */
+      }
+    }
+    return map;
+  }
+
   for (const actId of accountsToProcess) {
     try {
       const ads = await fetchAllAdsForAccount(actId);
       adsListed += ads.length;
+
+      const videoIds = Array.from(
+        new Set(ads.map((a) => a.creative?.video_id).filter((v): v is string => !!v))
+      );
+      const videoPictures = await fetchVideoPictures(videoIds);
 
       for (const ad of ads) {
         try {
@@ -155,12 +203,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const cpc = clicks > 0 ? spend / clicks : 0;
 
           // Priority: highest-resolution source first.
-          // - video_data.image_url: auto-generated video cover, typically 1280x720+
+          // - video.picture: full-res auto-generated video cover (~1280x720) — reliably HQ
+          // - video_data.image_url: video cover from creative spec
           // - creative.image_url: full-size original for static image ads
           // - link_data.picture: medium-quality preview (200-300px)
-          // - thumbnail_url (with width(600) expansion): 600x600 if Meta honored it
+          // - thumbnail_url: low-res default (~64-300px), last resort
           const c = ad.creative;
+          const videoPicture = c?.video_id ? videoPictures.get(c.video_id) ?? null : null;
           const thumbnailUrl =
+            videoPicture ||
             c?.object_story_spec?.video_data?.image_url ||
             c?.image_url ||
             c?.object_story_spec?.link_data?.picture ||
