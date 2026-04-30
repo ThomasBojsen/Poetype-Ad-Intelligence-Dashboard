@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { META_API_VERSION, computeMetrics, type InsightsRow } from './_lib/meta-helpers';
+import { META_API_VERSION, computeMetrics, type InsightsRow } from './_lib/meta-helpers.js';
 
 const metaToken = process.env.META_TOKEN;
 const metaAccountsEnv = process.env.META_AD_ACCOUNTS || '';
