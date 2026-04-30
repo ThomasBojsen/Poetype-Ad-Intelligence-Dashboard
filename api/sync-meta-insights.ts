@@ -61,9 +61,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     };
   };
+  // Meta returns creative.thumbnail_url at small default size. Field expansion
+  // with width/height requests a higher resolution version (much sharper in
+  // card view at 250-300px). object_story_spec.video_data.image_url and
+  // creative.image_url are fetched as higher-quality fallbacks.
+  const creativeFields =
+    'creative{thumbnail_url.width(600).height(600),image_url,video_id,' +
+    'object_story_spec{video_data{image_url},link_data{picture}}}';
   async function fetchAllAdsForAccount(actId: string): Promise<AdItem[]> {
     const all: AdItem[] = [];
-    let url: string | null = `https://graph.facebook.com/${META_API_VERSION}/${actId}/ads?fields=id,name,account_id,effective_status,creative{thumbnail_url,image_url,video_id,object_story_spec{video_data{image_url},link_data{picture}}}&limit=100&access_token=${metaToken}`;
+    let url: string | null = `https://graph.facebook.com/${META_API_VERSION}/${actId}/ads?fields=id,name,account_id,effective_status,${creativeFields}&limit=100&access_token=${metaToken}`;
     while (url && all.length < maxAdsPerAccount) {
       const resp = await fetch(url);
       if (!resp.ok) return all;
@@ -147,13 +154,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
           const cpc = clicks > 0 ? spend / clicks : 0;
 
+          // Priority: highest-resolution source first.
+          // - video_data.image_url: auto-generated video cover, typically 1280x720+
+          // - creative.image_url: full-size original for static image ads
+          // - link_data.picture: medium-quality preview (200-300px)
+          // - thumbnail_url (with width(600) expansion): 600x600 if Meta honored it
+          const c = ad.creative;
           const thumbnailUrl =
-            ad.creative?.thumbnail_url ||
-            ad.creative?.object_story_spec?.video_data?.image_url ||
-            ad.creative?.object_story_spec?.link_data?.picture ||
-            ad.creative?.image_url ||
+            c?.object_story_spec?.video_data?.image_url ||
+            c?.image_url ||
+            c?.object_story_spec?.link_data?.picture ||
+            c?.thumbnail_url ||
             null;
-          const creativeType: 'video' | 'image' | null = ad.creative?.video_id
+          const creativeType: 'video' | 'image' | null = c?.video_id
             ? 'video'
             : thumbnailUrl
             ? 'image'
