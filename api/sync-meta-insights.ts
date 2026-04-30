@@ -43,21 +43,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const accountsToProcess = metaAccounts.slice(accountOffset, accountOffset + accountsPerBatch);
   const errors: { account?: string; ad_id?: string; error: string }[] = [];
   let synced = 0;
+  let skipped = 0;
   let adsListed = 0;
 
   type AdItem = {
     id: string;
     name?: string;
     account_id?: string;
+    effective_status?: string;
     creative?: {
       thumbnail_url?: string;
       image_url?: string;
       video_id?: string;
+      object_story_spec?: {
+        video_data?: { image_url?: string };
+        link_data?: { picture?: string; image_hash?: string };
+      };
     };
   };
   async function fetchAllAdsForAccount(actId: string): Promise<AdItem[]> {
     const all: AdItem[] = [];
-    let url: string | null = `https://graph.facebook.com/${META_API_VERSION}/${actId}/ads?fields=id,name,account_id,creative{thumbnail_url,image_url,video_id}&limit=100&access_token=${metaToken}`;
+    let url: string | null = `https://graph.facebook.com/${META_API_VERSION}/${actId}/ads?fields=id,name,account_id,effective_status,creative{thumbnail_url,image_url,video_id,object_story_spec{video_data{image_url},link_data{picture}}}&limit=100&access_token=${metaToken}`;
     while (url && all.length < maxAdsPerAccount) {
       const resp = await fetch(url);
       if (!resp.ok) return all;
@@ -95,6 +101,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             insightsUrl.searchParams.set('date_preset', datePreset);
           }
           insightsUrl.searchParams.set('action_attribution_windows', '["28d_click"]');
+          // Report conversions on the impression/click date, not the conversion date.
+          // Without this, paused ads get "ghost revenue" from conversions that happen
+          // after the ad was paused (within the 28d_click window).
+          insightsUrl.searchParams.set('action_report_time', 'impression');
           insightsUrl.searchParams.set('access_token', metaToken);
 
           const iResp = await fetch(insightsUrl.toString());
@@ -111,7 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const iJson = (await iResp.json()) as { data?: InsightsRow[] };
           const dataRows = iJson?.data || [];
           if (dataRows.length === 0) {
-            errors.push({ account: actId, ad_id: ad.id, error: 'no insights data' });
+            skipped += 1;
             continue;
           }
 
@@ -138,7 +148,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const cpc = clicks > 0 ? spend / clicks : 0;
 
           const thumbnailUrl =
-            ad.creative?.thumbnail_url || ad.creative?.image_url || null;
+            ad.creative?.thumbnail_url ||
+            ad.creative?.object_story_spec?.video_data?.image_url ||
+            ad.creative?.object_story_spec?.link_data?.picture ||
+            ad.creative?.image_url ||
+            null;
           const creativeType: 'video' | 'image' | null = ad.creative?.video_id
             ? 'video'
             : thumbnailUrl
@@ -191,9 +205,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let message: string | undefined;
   if (synced > 0) {
-    message = `Synced ${synced} ad(s).`;
+    message =
+      skipped > 0
+        ? `Synced ${synced} ad(s); ${skipped} had no activity in this period.`
+        : `Synced ${synced} ad(s).`;
   } else if (errors.length > 0) {
     message = errors[0].error;
+  } else if (skipped > 0) {
+    message = `${skipped} ad(s) had no activity in this period.`;
   } else if (adsListed === 0) {
     message =
       'Meta API returned 0 ads. Check META_AD_ACCOUNTS (e.g. act_123) and token permissions (ads_read).';
@@ -205,6 +224,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({
     success: true,
     synced,
+    skipped,
     datePreset,
     totalAccounts: metaAccounts.length,
     processedAccounts: accountsToProcess.length,

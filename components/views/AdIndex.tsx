@@ -209,6 +209,7 @@ interface SyncErrorEntry {
 
 interface SyncReport {
   ok: number;
+  skipped: number;
   errors: SyncErrorEntry[];
   fatal?: string | null;
 }
@@ -269,6 +270,7 @@ const AdIndex: React.FC = () => {
     setSyncProgress({ done: 0, total: 0 });
     const aggregatedErrors: SyncErrorEntry[] = [];
     let totalSynced = 0;
+    let totalSkipped = 0;
     let offset = 0;
     let fatal: string | null = null;
     try {
@@ -285,6 +287,7 @@ const AdIndex: React.FC = () => {
           break;
         }
         totalSynced += json.synced ?? 0;
+        totalSkipped += json.skipped ?? 0;
         if (json.errors) aggregatedErrors.push(...json.errors);
         const nextOffset = json.accountOffset ?? offset + 1;
         const total = json.totalAccounts ?? 0;
@@ -298,7 +301,12 @@ const AdIndex: React.FC = () => {
     } catch (e) {
       fatal = e instanceof Error ? e.message : 'Network error';
     } finally {
-      setSyncReport({ ok: totalSynced, errors: aggregatedErrors, fatal });
+      setSyncReport({
+        ok: totalSynced,
+        skipped: totalSkipped,
+        errors: aggregatedErrors,
+        fatal,
+      });
       setSyncing(false);
     }
   };
@@ -406,7 +414,13 @@ const AdIndex: React.FC = () => {
                   ) : (
                     <p className="text-stone-600">
                       {syncReport.ok > 0
-                        ? `Synced ${syncReport.ok} ad(s) across all brands.`
+                        ? `Synced ${syncReport.ok} ad(s)${
+                            syncReport.skipped > 0
+                              ? `; ${syncReport.skipped} had no activity in this period`
+                              : ''
+                          }.`
+                        : syncReport.skipped > 0
+                        ? `${syncReport.skipped} ad(s) had no activity in this period.`
                         : 'No new data.'}
                     </p>
                   )}

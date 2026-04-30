@@ -32,6 +32,7 @@ async function fetchInsightsForAds(adIds: string[], datePreset: string): Promise
       url.searchParams.set('fields', 'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,account_currency');
       url.searchParams.set('date_preset', datePreset);
       url.searchParams.set('action_attribution_windows', '["28d_click"]');
+      url.searchParams.set('action_report_time', 'impression');
       url.searchParams.set('access_token', metaToken);
 
       const resp = await fetch(url.toString());

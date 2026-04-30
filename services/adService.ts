@@ -186,6 +186,7 @@ export interface SyncMetaInsightsPayload {
 export interface SyncMetaInsightsResult {
   success: boolean;
   synced?: number;
+  skipped?: number;
   datePreset?: string;
   totalAccounts?: number;
   processedAccounts?: number;
