@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           insightsUrl.searchParams.set(
             'fields',
-            'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,currency'
+            'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,account_currency'
           );
           if (useTimeRange) {
             insightsUrl.searchParams.set('time_range[since]', since);
@@ -128,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             clicks += m.clicks;
             purchases += m.purchases;
             purchase_value += m.purchase_value;
-            if (!currency && r.currency) currency = r.currency;
+            if (!currency && r.account_currency) currency = r.account_currency;
           }
 
           const roas =

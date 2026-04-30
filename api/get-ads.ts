@@ -38,7 +38,7 @@ async function fetchInsightsForAds(
   for (const adId of uniqueIds) {
     try {
       const url = new URL(`https://graph.facebook.com/${META_API_VERSION}/${adId}/insights`);
-      url.searchParams.set('fields', 'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,currency');
+      url.searchParams.set('fields', 'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,account_currency');
       url.searchParams.set('date_preset', datePreset);
       url.searchParams.set('action_attribution_windows', '["28d_click"]');
       url.searchParams.set('access_token', metaToken);
@@ -50,13 +50,13 @@ async function fetchInsightsForAds(
         continue;
       }
       const data = await resp.json();
-      const first = data?.data?.[0] as (InsightsRow & { currency?: string }) | undefined;
+      const first = data?.data?.[0] as (InsightsRow & { account_currency?: string }) | undefined;
       if (!first) continue;
 
       const m = computeMetrics(first);
       insightsMap[adId] = {
         ...m,
-        currency: first.currency,
+        currency: first.account_currency,
         date_preset: datePreset,
       };
     } catch (err) {

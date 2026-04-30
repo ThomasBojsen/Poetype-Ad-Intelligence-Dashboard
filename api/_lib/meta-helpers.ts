@@ -84,7 +84,7 @@ export type InsightsRow = ClickRow & {
   impressions?: string | number;
   actions?: ActionItem[];
   action_values?: ActionItem[];
-  currency?: string;
+  account_currency?: string;
 };
 
 export type ComputedMetrics = {
