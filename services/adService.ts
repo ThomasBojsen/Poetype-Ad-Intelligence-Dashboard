@@ -146,7 +146,7 @@ export const fetchPerformanceInsights = async (): Promise<{ ads: AdData[] }> => 
       reach: ad.reach || 0,
       ad_library_url: '',
       video_url: '',
-      thumbnail: '',
+      thumbnail: ad.thumbnail_url || '',
       heading: '',
       ad_copy: '',
       days_active: 0,
@@ -165,12 +165,50 @@ export const fetchPerformanceInsights = async (): Promise<{ ads: AdData[] }> => 
       insights_currency: ad.currency,
       insights_date_preset: ad.date_preset,
       account_id: ad.account_id ?? null,
+      creative_type: ad.creative_type ?? null,
     }));
     return { ads: mapped };
   } catch (err) {
     console.error('Error fetching performance insights', err);
     return { ads: [] };
   }
+};
+
+export interface SyncMetaInsightsPayload {
+  since?: string;
+  until?: string;
+  datePreset?: string;
+  accountOffset?: number;
+  accountsPerBatch?: number;
+  maxAdsPerAccount?: number;
+}
+
+export interface SyncMetaInsightsResult {
+  success: boolean;
+  synced?: number;
+  datePreset?: string;
+  totalAccounts?: number;
+  processedAccounts?: number;
+  accountOffset?: number;
+  hasMore?: boolean;
+  message?: string;
+  errors?: { account?: string; ad_id?: string; error: string }[];
+  error?: string;
+}
+
+export const syncMetaInsights = async (
+  payload: SyncMetaInsightsPayload
+): Promise<SyncMetaInsightsResult> => {
+  const response = await fetch(`${API_BASE_URL}/sync-meta-insights`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return { success: false, error: (json.error as string) || response.statusText || 'Sync failed' };
+  }
+  return json as SyncMetaInsightsResult;
 };
 
 /** Fetch performance insights as PerformanceInsight[] for Ad Index dashboard. */

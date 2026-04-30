@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-
-const META_API_VERSION = 'v21.0';
+import { META_API_VERSION, computeMetrics, type InsightsRow } from './_lib/meta-helpers';
 
 const metaToken = process.env.META_TOKEN;
 const metaAccountsEnv = process.env.META_AD_ACCOUNTS || '';
@@ -11,83 +10,6 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-
-/**
- * Meta returns the same conversion under multiple action types (purchase, omni_purchase,
- * offsite_conversion.fb_pixel_purchase). Summing all causes 2-3x overcounting.
- * Use only ONE canonical type, in priority order.
- */
-const PURCHASE_ACTION_PRIORITY = [
-  'omni_purchase',
-  'offsite_conversion.fb_pixel_purchase',
-  'purchase',
-];
-
-function getSinglePurchaseMetric(
-  arr: { action_type?: string; value?: string | number }[] | undefined
-): number {
-  if (!arr || !Array.isArray(arr)) return 0;
-  for (const canonicalType of PURCHASE_ACTION_PRIORITY) {
-    const item = arr.find((a) => String(a.action_type || '').toLowerCase() === canonicalType);
-    if (item) {
-      const val = Number(item.value ?? 0);
-      return Number.isFinite(val) ? val : 0;
-    }
-  }
-  return 0;
-}
-
-/** Extract outbound/link clicks from various Meta API response formats. Prefer outbound, fall back to link clicks. */
-function getClickCount(
-  row: {
-    outbound_clicks?: string | number | Array<{ action_type?: string; value?: string | number }>;
-    inline_link_clicks?: string | number;
-    clicks?: string | number;
-    actions?: { action_type?: string; value?: string | number }[];
-  }
-): number {
-  const ob = row.outbound_clicks;
-  if (ob != null) {
-    if (typeof ob === 'number' && Number.isFinite(ob)) return ob;
-    if (typeof ob === 'string') {
-      const n = Number(ob);
-      if (Number.isFinite(n)) return n;
-    }
-    if (Array.isArray(ob) && ob.length > 0) {
-      const outboundItems = ob.filter((a) =>
-        String(a?.action_type || '').toLowerCase().includes('outbound')
-      );
-      const toSum = outboundItems.length > 0 ? outboundItems : ob;
-      const sum = toSum.reduce((acc, a) => {
-        const v = a?.value ?? (a as any);
-        const n = typeof v === 'number' ? v : Number(v);
-        return acc + (Number.isFinite(n) ? n : 0);
-      }, 0);
-      if (sum > 0) return sum;
-      const v = ob[0]?.value ?? (ob[0] as any);
-      const n = typeof v === 'number' ? v : Number(v);
-      if (Number.isFinite(n)) return n;
-    }
-  }
-  const item = row.actions?.find((a) =>
-    ['outbound_click', 'link_click', 'inline_link_click'].includes(String(a.action_type || '').toLowerCase())
-  );
-  if (item) {
-    const n = Number(item.value ?? 0);
-    if (Number.isFinite(n)) return n;
-  }
-  const inline = row.inline_link_clicks;
-  if (inline != null) {
-    const n = typeof inline === 'number' ? inline : Number(inline);
-    if (Number.isFinite(n)) return n;
-  }
-  const clicks = row.clicks;
-  if (clicks != null) {
-    const n = typeof clicks === 'number' ? clicks : Number(clicks);
-    if (Number.isFinite(n)) return n;
-  }
-  return 0;
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -110,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const since = typeof body.since === 'string' ? body.since.trim() : '';
   const until = typeof body.until === 'string' ? body.until.trim() : '';
   const useTimeRange = since && until && /^\d{4}-\d{2}-\d{2}$/.test(since) && /^\d{4}-\d{2}-\d{2}$/.test(until);
-  const datePreset = useTimeRange ? `${since} - ${until}` : ((body.datePreset as string) || 'last_30d');
+  const datePreset = useTimeRange ? `${since} → ${until}` : ((body.datePreset as string) || 'last_30d');
   const accountOffset = Math.max(0, Number(body.accountOffset) || 0);
   const accountsPerBatch = Math.min(
     Math.max(Number(body.accountsPerBatch) || 1, 1),
@@ -123,10 +45,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let synced = 0;
   let adsListed = 0;
 
-  type AdItem = { id: string; name?: string; account_id?: string };
+  type AdItem = {
+    id: string;
+    name?: string;
+    account_id?: string;
+    creative?: {
+      thumbnail_url?: string;
+      image_url?: string;
+      video_id?: string;
+    };
+  };
   async function fetchAllAdsForAccount(actId: string): Promise<AdItem[]> {
     const all: AdItem[] = [];
-    let url: string | null = `https://graph.facebook.com/${META_API_VERSION}/${actId}/ads?fields=id,name,account_id&limit=100&access_token=${metaToken}`;
+    let url: string | null = `https://graph.facebook.com/${META_API_VERSION}/${actId}/ads?fields=id,name,account_id,creative{thumbnail_url,image_url,video_id}&limit=100&access_token=${metaToken}`;
     while (url && all.length < maxAdsPerAccount) {
       const resp = await fetch(url);
       if (!resp.ok) return all;
@@ -155,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           insightsUrl.searchParams.set(
             'fields',
-            'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values'
+            'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,currency'
           );
           if (useTimeRange) {
             insightsUrl.searchParams.set('time_range[since]', since);
@@ -177,17 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             continue;
           }
 
-          const iJson = (await iResp.json()) as {
-            data?: Array<{
-              spend?: string;
-              impressions?: string;
-              outbound_clicks?: string | number | { value?: string | number }[];
-              inline_link_clicks?: string | number;
-              clicks?: string | number;
-              actions?: { action_type?: string; value?: string | number }[];
-              action_values?: { action_type?: string; value?: string | number }[];
-            }>;
-          };
+          const iJson = (await iResp.json()) as { data?: InsightsRow[] };
           const dataRows = iJson?.data || [];
           if (dataRows.length === 0) {
             errors.push({ account: actId, ad_id: ad.id, error: 'no insights data' });
@@ -196,25 +117,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           let spend = 0;
           let impressions = 0;
-          let outboundClicks = 0;
+          let clicks = 0;
           let purchases = 0;
-          let purchaseValue = 0;
-          for (const row of dataRows) {
-            spend += Math.max(0, Number(row.spend ?? 0));
-            impressions += Math.max(0, Number(row.impressions ?? 0));
-            outboundClicks += getClickCount(row);
-            purchases += getSinglePurchaseMetric(row.actions);
-            purchaseValue += getSinglePurchaseMetric(row.action_values);
+          let purchase_value = 0;
+          let currency: string | null = null;
+          for (const r of dataRows) {
+            const m = computeMetrics(r);
+            spend += m.spend;
+            impressions += m.impressions;
+            clicks += m.clicks;
+            purchases += m.purchases;
+            purchase_value += m.purchase_value;
+            if (!currency && r.currency) currency = r.currency;
           }
 
           const roas =
-            spend > 0 && Number.isFinite(purchaseValue)
-              ? purchaseValue / spend
-              : null;
-
-          const ctr = impressions > 0 ? (outboundClicks / impressions) * 100 : 0;
+            spend > 0 && Number.isFinite(purchase_value) ? purchase_value / spend : null;
+          const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
           const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
-          const cpc = outboundClicks > 0 ? spend / outboundClicks : 0;
+          const cpc = clicks > 0 ? spend / clicks : 0;
+
+          const thumbnailUrl =
+            ad.creative?.thumbnail_url || ad.creative?.image_url || null;
+          const creativeType: 'video' | 'image' | null = ad.creative?.video_id
+            ? 'video'
+            : thumbnailUrl
+            ? 'image'
+            : null;
 
           const row = {
             ad_id: ad.id,
@@ -222,16 +151,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             name: ad.name ?? null,
             spend,
             impressions,
-            clicks: outboundClicks,
+            clicks,
             cpm,
             cpc,
             ctr,
             purchases,
-            purchase_value: purchaseValue,
+            purchase_value,
             roas,
-            currency: null,
+            currency,
             date_preset: datePreset,
             fetched_at: new Date().toISOString(),
+            thumbnail_url: thumbnailUrl,
+            creative_type: creativeType,
           };
 
           const { error: upsertError } = await supabase

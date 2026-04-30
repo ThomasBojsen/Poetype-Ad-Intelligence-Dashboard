@@ -1,9 +1,24 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { AdData } from '../../types';
-import { fetchPerformanceInsights } from '../../services/adService';
-import { DollarSign, TrendingUp, Eye, MousePointer, Image as ImageIcon, Filter, Search, X, RefreshCw, Calendar } from 'lucide-react';
+import { fetchPerformanceInsights, syncMetaInsights } from '../../services/adService';
+import { ALL_BRAND_NAMES, getBrandName } from '../../lib/brandMap';
+import {
+  DollarSign,
+  TrendingUp,
+  Eye,
+  MousePointer,
+  Image as ImageIcon,
+  Filter,
+  Search,
+  X,
+  RefreshCw,
+  Calendar,
+  LayoutGrid,
+  Rows,
+  Play,
+} from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const CURRENCY = 'kr';
 
 function formatDateForInput(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -15,41 +30,187 @@ function getDefaultDateRange(): { start: string; end: string } {
   return { start: formatDateForInput(start), end: formatDateForInput(end) };
 }
 
-type SortKey = 'spend' | 'roas' | null;
-type SortDir = 'asc' | 'desc';
+function formatPeriod(raw: string | null | undefined): string {
+  if (!raw) return '—';
+  if (raw.includes(' - ')) return raw.replace(' - ', ' → ');
+  if (raw.includes(' → ')) return raw;
+  return raw.replace(/_/g, ' ');
+}
 
-const CURRENCY = 'DKK';
+function formatCompact(n: number | null | undefined): string {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v)) return '0';
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000) {
+    const x = v / 1_000_000;
+    return `${x.toFixed(x >= 10 ? 0 : 1).replace('.0', '')}M`;
+  }
+  if (abs >= 1_000) {
+    const x = v / 1_000;
+    return `${x.toFixed(x >= 10 ? 0 : 1).replace('.0', '')}K`;
+  }
+  return Math.round(v).toLocaleString();
+}
 
-/** Map Meta ad account ID (with or without act_ prefix) to brand name. */
-const BRAND_BY_ACCOUNT_ID: Record<string, string> = {
-  'act_160601090255453': 'Bottleswithhistory',
-  '160601090255453': 'Bottleswithhistory',
-  'act_291563024': 'Brugteski',
-  '291563024': 'Brugteski',
-  'act_4535200689936481': 'Danaure',
-  '4535200689936481': 'Danaure',
-  'act_132188028743186': 'Sneakerzone',
-  '132188028743186': 'Sneakerzone',
-  'act_1315885735242181': 'Hansen&Nissen',
-  '1315885735242181': 'Hansen&Nissen',
-  'act_1698660960387576': 'Langkilde&Søn',
-  '1698660960387576': 'Langkilde&Søn',
-  'act_455696865623438': 'Langkilde&Søn norge',
-  '455696865623438': 'Langkilde&Søn norge',
-  'act_261638895522837': 'Langkilde&Søn Sverige',
-  '261638895522837': 'Langkilde&Søn Sverige',
-  'act_317052092634318': 'Poetype',
-  '317052092634318': 'Poetype',
-  'act_10154295052743253': 'Zentabox',
-  '10154295052743253': 'Zentabox',
+function formatMoney(n: number | null | undefined): string {
+  return `${CURRENCY} ${formatCompact(n)}`;
+}
+
+function formatDecimal(n: number | null | undefined, digits = 2): string {
+  return n != null ? Number(n).toFixed(digits) : '—';
+}
+
+function formatPct(n: number | null | undefined): string {
+  return n != null ? `${Number(n).toFixed(2)}%` : '—';
+}
+
+interface RoasStyle {
+  label: string;
+  classes: string;
+}
+
+function roasBucket(roas: number | null | undefined): RoasStyle {
+  if (roas == null || !Number.isFinite(Number(roas))) {
+    return { label: '—', classes: 'bg-stone-100 text-stone-400' };
+  }
+  const v = Number(roas);
+  const label = v.toFixed(2);
+  if (v < 1) return { label, classes: 'bg-rose-50 text-rose-700 ring-1 ring-rose-200' };
+  if (v < 2) return { label, classes: 'bg-stone-100 text-stone-700' };
+  if (v < 3) return { label, classes: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' };
+  return { label, classes: 'bg-emerald-600 text-white font-semibold' };
+}
+
+const SpendBar: React.FC<{ value: number; max: number }> = ({ value, max }) => {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className="h-1 mt-1 bg-stone-100 rounded-full overflow-hidden">
+      <div
+        className="h-full bg-[#D6453D]/70 rounded-full"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
 };
 
-const ALL_BRAND_NAMES = [...new Set(Object.values(BRAND_BY_ACCOUNT_ID))].sort();
+const RoasPill: React.FC<{ roas: number | null | undefined; size?: 'sm' | 'md' }> = ({
+  roas,
+  size = 'sm',
+}) => {
+  const style = roasBucket(roas);
+  const sizeClass = size === 'md' ? 'px-3 py-1.5 text-sm' : 'px-2 py-0.5 text-xs';
+  return (
+    <span className={`inline-flex items-center rounded-full tabular-nums ${sizeClass} ${style.classes}`}>
+      {style.label}×
+    </span>
+  );
+};
 
-function getBrandName(accountId: string | null | undefined): string {
-  if (!accountId) return '—';
-  const normalized = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
-  return BRAND_BY_ACCOUNT_ID[normalized] ?? BRAND_BY_ACCOUNT_ID[accountId] ?? accountId;
+const CreativeBlock: React.FC<{ ad: AdData; aspect?: 'square' | 'video' }> = ({
+  ad,
+  aspect = 'square',
+}) => {
+  const isVideo = ad.creative_type === 'video';
+  const aspectClass = aspect === 'video' ? 'aspect-video' : 'aspect-[5/4]';
+  return (
+    <div className={`${aspectClass} relative bg-stone-100 overflow-hidden`}>
+      {ad.thumbnail && ad.thumbnail.trim() !== '' ? (
+        <img
+          src={ad.thumbnail}
+          alt={ad.page_name || ''}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-[#FFF2EB]">
+          <ImageIcon size={36} strokeWidth={1.5} className="text-stone-300" />
+        </div>
+      )}
+      {isVideo && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-12 h-12 rounded-full bg-black/55 flex items-center justify-center backdrop-blur-sm">
+            <Play size={22} className="text-white ml-0.5" fill="white" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AdCard: React.FC<{ ad: AdData }> = ({ ad }) => {
+  const brand = getBrandName(ad.account_id);
+  return (
+    <div className="bg-white rounded-2xl border border-[#EADFD8] shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+      <CreativeBlock ad={ad} aspect="square" />
+      <div className="p-4 flex flex-col gap-3 flex-1">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-stone-400 font-semibold">
+            {brand}
+          </div>
+          <div
+            className="font-medium text-[#0B1221] text-sm truncate mt-0.5"
+            title={ad.page_name || ad.id}
+          >
+            {ad.page_name || ad.id}
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 pt-3 border-t border-[#EADFD8]">
+          <MetricRow label="Spend" value={formatMoney(ad.spend)} />
+          <MetricRow label="ROAS" valueNode={<RoasPill roas={ad.roas} />} />
+          <MetricRow label="Purchases" value={(ad.purchases ?? 0).toLocaleString()} />
+          <MetricRow label="Revenue" value={formatMoney(ad.purchase_value)} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MetricRow: React.FC<{ label: string; value?: string; valueNode?: React.ReactNode }> = ({
+  label,
+  value,
+  valueNode,
+}) => (
+  <div className="flex items-center justify-between gap-3 text-sm">
+    <span className="text-stone-500">{label}</span>
+    {valueNode ?? (
+      <span className="font-semibold tabular-nums text-[#0B1221]">{value}</span>
+    )}
+  </div>
+);
+
+type SortKey = 'spend' | 'roas' | 'purchases' | 'revenue';
+type SortDir = 'asc' | 'desc';
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'spend', label: 'Spend' },
+  { key: 'roas', label: 'ROAS' },
+  { key: 'purchases', label: 'Purchases' },
+  { key: 'revenue', label: 'Revenue' },
+];
+
+function getSortValue(ad: AdData, key: SortKey): number {
+  switch (key) {
+    case 'spend':
+      return ad.spend ?? 0;
+    case 'roas':
+      return ad.roas ?? 0;
+    case 'purchases':
+      return ad.purchases ?? 0;
+    case 'revenue':
+      return ad.purchase_value ?? 0;
+  }
+}
+
+interface SyncErrorEntry {
+  account?: string;
+  ad_id?: string;
+  error: string;
+}
+
+interface SyncReport {
+  ok: number;
+  errors: SyncErrorEntry[];
+  fatal?: string | null;
 }
 
 interface AdIndexFilters {
@@ -68,18 +229,22 @@ const defaultFilters: AdIndexFilters = {
   searchQuery: '',
 };
 
+type ViewMode = 'cards' | 'table';
+
 const AdIndex: React.FC = () => {
   const defaultRange = useMemo(() => getDefaultDateRange(), []);
   const [ads, setAds] = useState<AdData[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
+  const [syncProgress, setSyncProgress] = useState<{ done: number; total: number } | null>(null);
   const [dateStart, setDateStart] = useState(defaultRange.start);
   const [dateEnd, setDateEnd] = useState(defaultRange.end);
   const [sortKey, setSortKey] = useState<SortKey>('spend');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filters, setFilters] = useState<AdIndexFilters>(defaultFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
 
   const loadData = async () => {
     setLoading(true);
@@ -100,52 +265,41 @@ const AdIndex: React.FC = () => {
 
   const handleSync = async () => {
     setSyncing(true);
-    setSyncMessage(null);
+    setSyncReport(null);
+    setSyncProgress({ done: 0, total: 0 });
+    const aggregatedErrors: SyncErrorEntry[] = [];
     let totalSynced = 0;
     let offset = 0;
+    let fatal: string | null = null;
     try {
       for (;;) {
-        const res = await fetch(`${API_BASE_URL}/sync-meta-insights`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            since: dateStart,
-            until: dateEnd,
-            accountOffset: offset,
-            accountsPerBatch: 1,
-            maxAdsPerAccount: 100,
-          }),
+        const json = await syncMetaInsights({
+          since: dateStart,
+          until: dateEnd,
+          accountOffset: offset,
+          accountsPerBatch: 1,
+          maxAdsPerAccount: 100,
         });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setSyncMessage((json.error as string) || res.statusText || 'Sync failed');
+        if (!json.success) {
+          fatal = json.error || 'Sync failed';
           break;
         }
         totalSynced += json.synced ?? 0;
-        const nextOffset = json.accountOffset ?? offset + 3;
-        if (!json.hasMore || nextOffset >= (json.totalAccounts ?? 0)) {
-          setSyncMessage(
-            totalSynced > 0
-              ? `Synced ${totalSynced} ad(s) across all brands.`
-              : (json.message as string) || 'No new data.'
-          );
+        if (json.errors) aggregatedErrors.push(...json.errors);
+        const nextOffset = json.accountOffset ?? offset + 1;
+        const total = json.totalAccounts ?? 0;
+        setSyncProgress({ done: nextOffset, total });
+        if (!json.hasMore || nextOffset >= total) {
           break;
         }
         offset = nextOffset;
       }
       await loadData();
     } catch (e) {
-      setSyncMessage(e instanceof Error ? e.message : 'Network error');
+      fatal = e instanceof Error ? e.message : 'Network error';
     } finally {
+      setSyncReport({ ok: totalSynced, errors: aggregatedErrors, fatal });
       setSyncing(false);
-    }
-  };
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else {
-      setSortKey(key);
-      setSortDir('desc');
     }
   };
 
@@ -168,21 +322,24 @@ const AdIndex: React.FC = () => {
   }, [ads, filters]);
 
   const sortedAds = useMemo(() => {
-    if (!sortKey) return filteredAds;
     return [...filteredAds].sort((a, b) => {
-      const aVal = sortKey === 'spend' ? (a.spend ?? 0) : (a.roas ?? 0);
-      const bVal = sortKey === 'spend' ? (b.spend ?? 0) : (b.roas ?? 0);
-      const cmp = aVal - bVal;
+      const cmp = getSortValue(a, sortKey) - getSortValue(b, sortKey);
       return sortDir === 'asc' ? cmp : -cmp;
     });
   }, [filteredAds, sortKey, sortDir]);
 
+  const maxSpend = useMemo(
+    () => filteredAds.reduce((m, a) => Math.max(m, a.spend ?? 0), 0),
+    [filteredAds]
+  );
+
   const totalSpend = filteredAds.reduce((s, a) => s + (a.spend ?? 0), 0);
   const totalImpressions = filteredAds.reduce((s, a) => s + (a.impressions ?? 0), 0);
   const totalClicks = filteredAds.reduce((s, a) => s + (a.clicks ?? 0), 0);
-  const globalRoas = totalSpend > 0
-    ? filteredAds.reduce((s, a) => s + (a.purchase_value ?? 0), 0) / totalSpend
-    : 0;
+  const globalRoas =
+    totalSpend > 0
+      ? filteredAds.reduce((s, a) => s + (a.purchase_value ?? 0), 0) / totalSpend
+      : 0;
 
   const hasActiveFilters =
     filters.selectedBrands.length > 0 ||
@@ -202,17 +359,26 @@ const AdIndex: React.FC = () => {
     }));
   };
 
-  const formatCurrency = (n: number) =>
-    `${CURRENCY} ${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  const formatPct = (n: number | null | undefined) =>
-    n != null ? `${Number(n).toFixed(2)}%` : '—';
-
   const metricCards = [
-    { label: 'Total Spend', value: formatCurrency(totalSpend), icon: DollarSign },
-    { label: 'Global ROAS', value: globalRoas.toFixed(2), icon: TrendingUp },
-    { label: 'Total Impressions', value: totalImpressions.toLocaleString(), icon: Eye },
-    { label: 'Outbound Clicks', value: totalClicks.toLocaleString(), icon: MousePointer },
+    { label: 'Total Spend', value: formatMoney(totalSpend), icon: DollarSign },
+    { label: 'Global ROAS', value: `${globalRoas.toFixed(2)}×`, icon: TrendingUp },
+    { label: 'Total Impressions', value: formatCompact(totalImpressions), icon: Eye },
+    { label: 'Outbound Clicks', value: formatCompact(totalClicks), icon: MousePointer },
   ];
+
+  const syncButtonLabel = syncing
+    ? syncProgress && syncProgress.total > 0
+      ? `Syncing ${syncProgress.done}/${syncProgress.total}...`
+      : 'Syncing...'
+    : 'Sync from Meta';
+
+  const handleHeaderSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#FFF2EB] min-h-0">
@@ -231,12 +397,34 @@ const AdIndex: React.FC = () => {
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-[#0B1221] text-white hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <RefreshCw size={16} strokeWidth={1.5} className={syncing ? 'animate-spin' : ''} />
-                {syncing ? 'Syncing all brands...' : 'Sync from Meta'}
+                {syncButtonLabel}
               </button>
-              {syncMessage && (
-                <p className={`text-sm ${syncMessage.startsWith('Synced') ? 'text-stone-600' : 'text-amber-700'}`}>
-                  {syncMessage}
-                </p>
+              {syncReport && (
+                <div className="text-sm flex flex-col items-start sm:items-end gap-1 max-w-md">
+                  {syncReport.fatal ? (
+                    <p className="text-amber-700">{syncReport.fatal}</p>
+                  ) : (
+                    <p className="text-stone-600">
+                      {syncReport.ok > 0
+                        ? `Synced ${syncReport.ok} ad(s) across all brands.`
+                        : 'No new data.'}
+                    </p>
+                  )}
+                  {syncReport.errors.length > 0 && (
+                    <details className="text-xs text-amber-700 w-full">
+                      <summary className="cursor-pointer">
+                        {syncReport.errors.length} error(s) — click to expand
+                      </summary>
+                      <ul className="mt-1 space-y-0.5 max-h-40 overflow-y-auto pr-2">
+                        {syncReport.errors.map((e, i) => (
+                          <li key={i} className="font-mono">
+                            {e.account ?? '?'}/{e.ad_id ?? '—'}: {e.error}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -386,7 +574,7 @@ const AdIndex: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {metricCards.map(({ label, value, icon: Icon }) => (
                 <div
                   key={label}
@@ -396,130 +584,210 @@ const AdIndex: React.FC = () => {
                     <Icon size={28} strokeWidth={1.5} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">{label}</p>
-                    <p className="text-2xl font-semibold tracking-tight text-[#0B1221] truncate">{value}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+                      {label}
+                    </p>
+                    <p className="text-2xl font-semibold tracking-tight text-[#0B1221] truncate tabular-nums">
+                      {value}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="bg-white rounded-2xl border border-[#EADFD8] shadow-sm overflow-hidden">
-              {sortedAds.length === 0 ? (
-                <div className="py-16 text-center text-stone-500">
-                  <ImageIcon size={48} className="mx-auto mb-3 opacity-40 text-[#D6453D]" />
-                  <p className="font-medium">
-                    {ads.length === 0
-                      ? 'Ingen performance data'
-                      : 'Ingen annoncer matcher dine filtre'}
-                  </p>
-                  <p className="text-sm mt-1">
-                    {ads.length === 0
-                      ? 'Kør sync fra Meta for at hente indsigt.'
-                      : 'Prøv at ændre eller nulstille filtrene.'}
-                  </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                  Sort
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {SORT_OPTIONS.map((opt) => {
+                    const active = sortKey === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => handleHeaderSort(opt.key)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          active
+                            ? 'bg-[#0B1221] text-white'
+                            : 'bg-white border border-[#EADFD8] text-stone-600 hover:text-[#0B1221]'
+                        }`}
+                      >
+                        {opt.label} {active && (sortDir === 'desc' ? '↓' : '↑')}
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : (
+              </div>
+              <div className="inline-flex items-center bg-white border border-[#EADFD8] rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('cards')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === 'cards'
+                      ? 'bg-[#0B1221] text-white'
+                      : 'text-stone-500 hover:text-[#0B1221]'
+                  }`}
+                  title="Card view"
+                >
+                  <LayoutGrid size={14} strokeWidth={2} />
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === 'table'
+                      ? 'bg-[#0B1221] text-white'
+                      : 'text-stone-500 hover:text-[#0B1221]'
+                  }`}
+                  title="Dense table"
+                >
+                  <Rows size={14} strokeWidth={2} />
+                  Table
+                </button>
+              </div>
+            </div>
+
+            {sortedAds.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-[#EADFD8] shadow-sm py-16 text-center text-stone-500">
+                <ImageIcon size={48} className="mx-auto mb-3 opacity-40 text-[#D6453D]" />
+                <p className="font-medium">
+                  {ads.length === 0
+                    ? 'Ingen performance data'
+                    : 'Ingen annoncer matcher dine filtre'}
+                </p>
+                <p className="text-sm mt-1">
+                  {ads.length === 0
+                    ? 'Kør sync fra Meta for at hente indsigt.'
+                    : 'Prøv at ændre eller nulstille filtrene.'}
+                </p>
+              </div>
+            ) : viewMode === 'cards' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {sortedAds.map((ad) => (
+                  <AdCard key={ad.id} ad={ad} />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-[#EADFD8] shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm tabular-nums">
                     <thead>
-                      <tr className="border-b border-[#EADFD8] bg-[#FFF8F5]">
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 pl-6 pr-4 py-4 w-24">Creative</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Brand</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Ad Name</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">
+                      <tr className="border-b border-[#EADFD8] bg-[#FFF8F5] text-xs font-semibold uppercase tracking-wider text-stone-500">
+                        <th className="text-left pl-6 pr-3 py-3 w-[88px]">Creative</th>
+                        <th className="text-left px-3 py-3">Ad</th>
+                        <th className="text-right px-3 py-3 w-[140px]">
                           <button
                             type="button"
-                            onClick={() => handleSort('spend')}
-                            className="inline-flex items-center gap-1 hover:text-[#D6453D] font-semibold"
+                            onClick={() => handleHeaderSort('spend')}
+                            className="inline-flex items-center gap-1 hover:text-[#D6453D] font-semibold uppercase tracking-wider"
                           >
                             Spend
                             {sortKey === 'spend' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                           </button>
                         </th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">
+                        <th className="text-right px-3 py-3 w-[80px]">
                           <button
                             type="button"
-                            onClick={() => handleSort('roas')}
-                            className="inline-flex items-center gap-1 hover:text-[#D6453D] font-semibold"
+                            onClick={() => handleHeaderSort('roas')}
+                            className="inline-flex items-center gap-1 hover:text-[#D6453D] font-semibold uppercase tracking-wider"
                           >
                             ROAS
                             {sortKey === 'roas' && (sortDir === 'desc' ? ' ↓' : ' ↑')}
                           </button>
                         </th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Purchases</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Purchase value</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">CPM</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">CPC</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">CTR</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Impressions</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 px-4 py-4">Outbound Clicks</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-stone-500 pl-4 pr-6 py-4">Period</th>
+                        <th className="text-right px-3 py-3">Purchases</th>
+                        <th className="text-right px-3 py-3">Revenue</th>
+                        <th className="text-right px-3 py-3">CPM</th>
+                        <th className="text-right px-3 py-3">CPC</th>
+                        <th className="text-right px-3 py-3">CTR</th>
+                        <th className="text-right px-3 py-3">Impr.</th>
+                        <th className="text-right px-3 py-3">Out. Clicks</th>
+                        <th className="text-left pl-3 pr-6 py-3 text-[10px]">Period</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sortedAds.map((row) => {
-                        const roasVal = row.roas != null ? Number(row.roas) : null;
-                        const roasHigh = roasVal != null && roasVal > 2.0;
+                        const brand = getBrandName(row.account_id);
+                        const isVideo = row.creative_type === 'video';
                         return (
-                          <tr key={row.id} className="border-b border-[#EADFD8] hover:bg-[#FFF8F5] transition-colors">
-                            <td className="pl-6 pr-4 py-3">
-                              {row.thumbnail && row.thumbnail.trim() !== '' ? (
-                                <img
-                                  src={row.thumbnail}
-                                  alt=""
-                                  className="w-16 h-16 object-cover rounded-lg bg-stone-100"
-                                />
-                              ) : row.video_url && row.video_url.trim() !== '' ? (
-                                <div className="w-16 h-16 rounded-lg bg-stone-200 flex items-center justify-center text-stone-400">
-                                  <span className="text-xs">Video</span>
+                          <tr
+                            key={row.id}
+                            className="border-b border-[#EADFD8] hover:bg-[#FFF8F5] transition-colors"
+                          >
+                            <td className="pl-6 pr-3 py-3 align-top">
+                              <div className="flex flex-col items-start gap-1">
+                                <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-stone-100">
+                                  {row.thumbnail && row.thumbnail.trim() !== '' ? (
+                                    <img
+                                      src={row.thumbnail}
+                                      alt=""
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-[#FFF2EB] border border-[#EADFD8]">
+                                      <ImageIcon size={20} className="text-stone-400" />
+                                    </div>
+                                  )}
+                                  {isVideo && (
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                      <div className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center">
+                                        <Play size={12} className="text-white ml-0.5" fill="white" />
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              ) : (
-                                <div className="w-16 h-16 rounded-lg bg-[#FFF2EB] border border-[#EADFD8] flex items-center justify-center text-stone-400">
-                                  <ImageIcon size={20} />
-                                </div>
-                              )}
+                                <span className="inline-block max-w-[64px] truncate text-[10px] font-medium uppercase tracking-wider text-stone-500">
+                                  {brand}
+                                </span>
+                              </div>
                             </td>
-                            <td className="px-4 py-3 font-medium text-[#0B1221] whitespace-nowrap">
-                              {getBrandName(row.account_id)}
+                            <td
+                              className="px-3 py-3 align-top text-stone-700 max-w-[240px]"
+                              title={row.page_name || row.id}
+                            >
+                              <div className="truncate font-medium text-[#0B1221]">
+                                {row.page_name || row.id}
+                              </div>
                             </td>
-                            <td className="px-4 py-3 text-stone-700 max-w-[220px] truncate" title={row.page_name || row.id}>
-                              {row.page_name || row.id}
+                            <td className="px-3 py-3 align-top text-right">
+                              <div className="font-semibold text-[#0B1221]">
+                                {formatMoney(row.spend)}
+                              </div>
+                              <SpendBar value={row.spend ?? 0} max={maxSpend} />
                             </td>
-                            <td className="px-4 py-3 text-stone-700">
-                              {formatCurrency(Number(row.spend ?? 0))}
+                            <td className="px-3 py-3 align-top text-right">
+                              <RoasPill roas={row.roas} />
                             </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={
-                                  roasHigh
-                                    ? 'font-bold text-emerald-600'
-                                    : 'text-stone-700'
-                                }
-                              >
-                                {roasVal != null ? Number(roasVal).toFixed(2) : '—'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-stone-700">
+                            <td className="px-3 py-3 align-top text-right text-stone-700">
                               {(row.purchases ?? 0).toLocaleString()}
                             </td>
-                            <td className="px-4 py-3 text-stone-700">
-                              {formatCurrency(Number(row.purchase_value ?? 0))}
+                            <td className="px-3 py-3 align-top text-right text-stone-700">
+                              {formatMoney(row.purchase_value)}
                             </td>
-                            <td className="px-4 py-3 text-stone-700">
-                              {row.cpm != null ? Number(row.cpm).toFixed(2) : '—'}
+                            <td className="px-3 py-3 align-top text-right text-stone-700">
+                              {formatDecimal(row.cpm)}
                             </td>
-                            <td className="px-4 py-3 text-stone-700">
-                              {row.cpc != null ? Number(row.cpc).toFixed(2) : '—'}
+                            <td className="px-3 py-3 align-top text-right text-stone-700">
+                              {formatDecimal(row.cpc)}
                             </td>
-                            <td className="px-4 py-3 text-stone-700">{formatPct(row.ctr)}</td>
-                            <td className="px-4 py-3 text-stone-700">
-                              {(row.impressions ?? 0).toLocaleString()}
+                            <td className="px-3 py-3 align-top text-right text-stone-700">
+                              {formatPct(row.ctr)}
                             </td>
-                            <td className="px-4 py-3 text-stone-700">
-                              {(row.clicks ?? 0).toLocaleString()}
+                            <td className="px-3 py-3 align-top text-right text-stone-700">
+                              {formatCompact(row.impressions)}
                             </td>
-                            <td className="pl-4 pr-6 py-3 text-stone-500 text-xs whitespace-nowrap" title={row.insights_date_preset ?? undefined}>
-                              {row.insights_date_preset ?? '—'}
+                            <td className="px-3 py-3 align-top text-right text-stone-700">
+                              {formatCompact(row.clicks)}
+                            </td>
+                            <td
+                              className="pl-3 pr-6 py-3 align-top text-stone-500 text-[10px] whitespace-nowrap"
+                              title={row.insights_date_preset ?? undefined}
+                            >
+                              {formatPeriod(row.insights_date_preset)}
                             </td>
                           </tr>
                         );
@@ -527,8 +795,8 @@ const AdIndex: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </div>

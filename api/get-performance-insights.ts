@@ -8,16 +8,17 @@ if (!supabaseUrl || !supabaseKey) {
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export default async function handler(_req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 1000, 1), 5000);
     const { data, error } = await supabase
       .from('performance_insights')
       .select('*')
       .order('spend', { ascending: false })
-      .limit(200);
+      .limit(limit);
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json({ success: true, ads: data || [] });
-  } catch (err:any) {
+  } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 }

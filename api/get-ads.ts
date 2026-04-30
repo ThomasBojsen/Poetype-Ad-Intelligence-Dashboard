@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { META_API_VERSION, computeMetrics, type InsightsRow } from './_lib/meta-helpers';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -22,81 +23,22 @@ function parseAdIdFromUrl(url?: string | null): string | null {
   return match ? match[1] : null;
 }
 
-/** Meta returns the same conversion under multiple action types. Use only one to avoid 2-3x overcounting. */
-const PURCHASE_ACTION_PRIORITY = ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'];
-
-function getSinglePurchaseMetric(arr: { action_type?: string; value?: string | number }[] | undefined): number {
-  if (!arr || !Array.isArray(arr)) return 0;
-  for (const t of PURCHASE_ACTION_PRIORITY) {
-    const item = arr.find((a) => String(a.action_type || '').toLowerCase() === t);
-    if (item) {
-      const val = Number(item.value ?? 0);
-      return Number.isFinite(val) ? val : 0;
-    }
-  }
-  return 0;
-}
-
-function getClickCount(row: any): number {
-  const ob = row?.outbound_clicks;
-  if (ob != null) {
-    if (typeof ob === 'number' && Number.isFinite(ob)) return ob;
-    if (typeof ob === 'string') {
-      const n = Number(ob);
-      if (Number.isFinite(n)) return n;
-    }
-    if (Array.isArray(ob) && ob.length > 0) {
-      const outboundItems = ob.filter((a: any) =>
-        String(a?.action_type || '').toLowerCase().includes('outbound')
-      );
-      const toSum = outboundItems.length > 0 ? outboundItems : ob;
-      const sum = toSum.reduce((acc: number, a: any) => {
-        const v = a?.value ?? a;
-        const n = typeof v === 'number' ? v : Number(v);
-        return acc + (Number.isFinite(n) ? n : 0);
-      }, 0);
-      if (sum > 0) return sum;
-      const v = ob[0]?.value ?? ob[0];
-      const n = Number(v);
-      if (Number.isFinite(n)) return n;
-    }
-  }
-  const item = (row?.actions || []).find((a: any) =>
-    ['outbound_click', 'link_click', 'inline_link_click'].includes(String(a?.action_type || '').toLowerCase())
-  );
-  if (item) {
-    const n = Number(item.value ?? 0);
-    if (Number.isFinite(n)) return n;
-  }
-  const inline = row?.inline_link_clicks;
-  if (inline != null) {
-    const n = typeof inline === 'number' ? inline : Number(inline);
-    if (Number.isFinite(n)) return n;
-  }
-  const clicks = row?.clicks;
-  if (clicks != null) {
-    const n = typeof clicks === 'number' ? clicks : Number(clicks);
-    if (Number.isFinite(n)) return n;
-  }
-  return 0;
-}
-
 async function fetchInsightsForAds(
   adIds: string[],
   datePreset: string = 'last_30d'
-): Promise<Record<string, any>> {
+): Promise<Record<string, ReturnType<typeof computeMetrics> & { currency?: string; date_preset: string }>> {
   if (!metaToken || metaAccounts.length === 0) {
     console.warn('META_TOKEN or META_AD_ACCOUNTS missing; skipping insights');
     return {};
   }
 
   const uniqueIds = Array.from(new Set(adIds)).filter(Boolean);
-  const insightsMap: Record<string, any> = {};
+  const insightsMap: Record<string, ReturnType<typeof computeMetrics> & { currency?: string; date_preset: string }> = {};
 
   for (const adId of uniqueIds) {
     try {
-      const url = new URL(`https://graph.facebook.com/v19.0/${adId}/insights`);
-      url.searchParams.set('fields', 'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,purchase_roas,currency');
+      const url = new URL(`https://graph.facebook.com/${META_API_VERSION}/${adId}/insights`);
+      url.searchParams.set('fields', 'spend,impressions,outbound_clicks,inline_link_clicks,clicks,actions,action_values,currency');
       url.searchParams.set('date_preset', datePreset);
       url.searchParams.set('action_attribution_windows', '["28d_click"]');
       url.searchParams.set('access_token', metaToken);
@@ -108,33 +50,12 @@ async function fetchInsightsForAds(
         continue;
       }
       const data = await resp.json();
-      const first = data?.data?.[0];
+      const first = data?.data?.[0] as (InsightsRow & { currency?: string }) | undefined;
       if (!first) continue;
 
-      const actions = first.actions as any[] | undefined;
-      const actionValues = first.action_values as any[] | undefined;
-      const roasArr = first.roas as any[] | undefined;
-
-      const purchases = getSinglePurchaseMetric(actions);
-      const purchaseValue = getSinglePurchaseMetric(actionValues);
-      const roas = roasArr && roasArr.length > 0 ? Number(roasArr[0].value || 0) : 0;
-      const spend = Number(first.spend || 0);
-      const impressions = Number(first.impressions || 0);
-      const outboundClicks = getClickCount(first);
-      const ctr = impressions > 0 ? (outboundClicks / impressions) * 100 : 0;
-      const cpc = outboundClicks > 0 ? spend / outboundClicks : 0;
-      const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
-
+      const m = computeMetrics(first);
       insightsMap[adId] = {
-        spend,
-        impressions,
-        clicks: outboundClicks,
-        cpm,
-        cpc,
-        ctr,
-        roas,
-        purchases,
-        purchase_value: purchaseValue,
+        ...m,
         currency: first.currency,
         date_preset: datePreset,
       };
@@ -148,7 +69,7 @@ async function fetchInsightsForAds(
 
 async function persistInsights(
   adIdToSupabaseId: Record<string, string>,
-  insightsMap: Record<string, any>
+  insightsMap: Record<string, ReturnType<typeof computeMetrics> & { currency?: string; date_preset: string }>
 ) {
   const updates = Object.entries(insightsMap).map(([adId, insight]) => {
     const supaId = adIdToSupabaseId[adId];
@@ -168,7 +89,7 @@ async function persistInsights(
       insights_date_preset: insight.date_preset,
       last_insights_at: new Date().toISOString(),
     };
-  }).filter(Boolean) as any[];
+  }).filter(Boolean) as Array<Record<string, unknown>>;
 
   if (updates.length === 0) return;
 
@@ -190,11 +111,11 @@ export default async function handler(
   }
 
   try {
-    const sessionId = req.method === 'GET' 
+    const sessionId = req.method === 'GET'
       ? (req.query.sessionId as string)
       : req.body?.sessionId;
 
-    const datePreset = (req.method === 'GET' 
+    const datePreset = (req.method === 'GET'
       ? (req.query.datePreset as string)
       : req.body?.datePreset) || 'last_30d';
 
@@ -270,7 +191,7 @@ export default async function handler(
       return { ...ad, days_active, viral_score, ad_id };
     });
 
-    let insightsMap: Record<string, any> = {};
+    let insightsMap: Record<string, ReturnType<typeof computeMetrics> & { currency?: string; date_preset: string }> = {};
     try {
       const adIds = enhancedAds.map((a) => a.ad_id).filter(Boolean) as string[];
       if (adIds.length > 0) {
@@ -310,9 +231,9 @@ export default async function handler(
     });
   } catch (error: any) {
     console.error('Unexpected error in get-ads:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Internal server error',
-      details: error.message 
+      details: error.message
     });
   }
 }

@@ -23,6 +23,7 @@ export interface AdData {
   insights_currency?: string | null;
   insights_date_preset?: string | null;
   account_id?: string | null;
+  creative_type?: 'video' | 'image' | null;
 }
 
 export interface FilterState {

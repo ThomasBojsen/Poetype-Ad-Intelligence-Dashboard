@@ -28,6 +28,13 @@ create index if not exists performance_insights_account_id_idx on performance_in
 create index if not exists performance_insights_spend_idx on performance_insights(spend);
 ```
 
+### Creative columns (added for Motion-style card view)
+
+```sql
+alter table performance_insights add column if not exists thumbnail_url text;
+alter table performance_insights add column if not exists creative_type text; -- 'video' | 'image' | null
+```
+
 ---
 
 ## ads table (Konkurrentanalyse)
