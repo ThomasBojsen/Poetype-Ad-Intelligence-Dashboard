@@ -276,6 +276,7 @@ interface SyncReport {
   ok: number;
   skipped: number;
   errors: SyncErrorEntry[];
+  thumbnailSources: Record<string, number>;
   fatal?: string | null;
 }
 
@@ -334,6 +335,7 @@ const AdIndex: React.FC = () => {
     setSyncReport(null);
     setSyncProgress({ done: 0, total: 0 });
     const aggregatedErrors: SyncErrorEntry[] = [];
+    const aggregatedSources: Record<string, number> = {};
     let totalSynced = 0;
     let totalSkipped = 0;
     let offset = 0;
@@ -354,6 +356,11 @@ const AdIndex: React.FC = () => {
         totalSynced += json.synced ?? 0;
         totalSkipped += json.skipped ?? 0;
         if (json.errors) aggregatedErrors.push(...json.errors);
+        if (json.thumbnailSources) {
+          for (const [k, v] of Object.entries(json.thumbnailSources)) {
+            aggregatedSources[k] = (aggregatedSources[k] ?? 0) + v;
+          }
+        }
         const nextOffset = json.accountOffset ?? offset + 1;
         const total = json.totalAccounts ?? 0;
         setSyncProgress({ done: nextOffset, total });
@@ -370,6 +377,7 @@ const AdIndex: React.FC = () => {
         ok: totalSynced,
         skipped: totalSkipped,
         errors: aggregatedErrors,
+        thumbnailSources: aggregatedSources,
         fatal,
       });
       setSyncing(false);
@@ -500,6 +508,21 @@ const AdIndex: React.FC = () => {
                             {e.account ?? '?'}/{e.ad_id ?? '—'}: {e.error}
                           </li>
                         ))}
+                      </ul>
+                    </details>
+                  )}
+                  {Object.keys(syncReport.thumbnailSources).length > 0 && (
+                    <details className="text-xs text-stone-500 w-full">
+                      <summary className="cursor-pointer">Thumbnail sources</summary>
+                      <ul className="mt-1 space-y-0.5">
+                        {Object.entries(syncReport.thumbnailSources)
+                          .filter(([, n]) => n > 0)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([source, n]) => (
+                            <li key={source} className="font-mono">
+                              {source}: {n}
+                            </li>
+                          ))}
                       </ul>
                     </details>
                   )}

@@ -46,6 +46,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let skipped = 0;
   let adsListed = 0;
 
+  // Track which thumbnail-source won per ad. Helpful for debugging "why blurry?"
+  type ThumbnailSource =
+    | 'adimages_hash'
+    | 'video_custom'
+    | 'video_thumbnails'
+    | 'video_picture'
+    | 'post_attachments'
+    | 'post_full_picture'
+    | 'creative_image_url'
+    | 'preview_iframe'
+    | 'video_data_image_url'
+    | 'link_data_picture'
+    | 'creative_thumbnail_url'
+    | 'none';
+  const thumbnailSourceCounts: Record<ThumbnailSource, number> = {
+    adimages_hash: 0,
+    video_custom: 0,
+    video_thumbnails: 0,
+    video_picture: 0,
+    post_attachments: 0,
+    post_full_picture: 0,
+    creative_image_url: 0,
+    preview_iframe: 0,
+    video_data_image_url: 0,
+    link_data_picture: 0,
+    creative_thumbnail_url: 0,
+    none: 0,
+  };
+  const thumbnailSamples: Array<{ ad_id: string; name?: string; source: ThumbnailSource; url?: string }> = [];
+
   type AdItem = {
     id: string;
     name?: string;
@@ -292,6 +322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const ads = await fetchAllAdsForAccount(actId);
       adsListed += ads.length;
+      console.log(`[sync] account=${actId} ads_listed=${ads.length}`);
 
       const videoIds = Array.from(
         new Set(ads.map((a) => a.creative?.video_id).filter((v): v is string => !!v))
@@ -318,6 +349,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fetchAdImagesByHash(actId, imageHashes),
       ]);
 
+      console.log(
+        `[sync] account=${actId} enrichment: ` +
+          `videos=${videoIds.length} (got=${videoInfos.size}), ` +
+          `posts=${storyIds.length} (got=${postInfos.size}), ` +
+          `image_hashes=${imageHashes.length} (got=${imagesByHash.size})`
+      );
+
       // Preview-based HD extraction (concurrent per account). Run for any ad
       // whose creative-level fields don't yield an HD URL — typically video
       // ads where Meta's thumbnail_url is hard-capped at 64x64.
@@ -338,6 +376,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const [id, url] of previewResults) {
         if (url) previewMap.set(id, url);
       }
+      console.log(
+        `[sync] account=${actId} previews: tried=${adsForPreview.length} ` +
+          `succeeded=${previewMap.size}`
+      );
 
       for (const ad of ads) {
         try {
@@ -402,26 +444,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const cpc = clicks > 0 ? spend / clicks : 0;
 
           // Priority: original uploaded asset → rendered post media → preview iframe → fallbacks.
+          // Track which source actually won (logged for debugging).
           const c = ad.creative;
           const hash = c?.image_hash || c?.object_story_spec?.link_data?.image_hash;
           const originalImage = hash ? imagesByHash.get(hash) ?? null : null;
-          const videoThumb = c?.video_id
-            ? bestVideoThumbnail(videoInfos.get(c.video_id))
-            : null;
-          const postPicture = c?.effective_object_story_id
-            ? bestPostThumbnail(postInfos.get(c.effective_object_story_id))
-            : null;
+          const videoInfo = c?.video_id ? videoInfos.get(c.video_id) : undefined;
+          const customThumb = pickBestThumb(videoInfo?.custom_thumbnails ?? []);
+          const videoListThumb = pickBestThumb(videoInfo?.thumbnails?.data ?? []);
+          const videoPicture = videoInfo?.picture ?? null;
+          const postInfo = c?.effective_object_story_id
+            ? postInfos.get(c.effective_object_story_id)
+            : undefined;
+          const postAttach = (() => {
+            const att = postInfo?.attachments?.data ?? [];
+            for (const a of att) {
+              if (a?.media?.image?.src) return a.media.image.src;
+              for (const s of a?.subattachments?.data ?? []) {
+                if (s?.media?.image?.src) return s.media.image.src;
+              }
+            }
+            return null;
+          })();
+          const postFull = postInfo?.full_picture ?? postInfo?.picture ?? null;
           const previewImage = previewMap.get(ad.id) ?? null;
-          const thumbnailUrl =
-            originalImage ||
-            videoThumb ||
-            postPicture ||
-            c?.image_url ||
-            previewImage ||
-            c?.object_story_spec?.video_data?.image_url ||
-            c?.object_story_spec?.link_data?.picture ||
-            c?.thumbnail_url ||
-            null;
+
+          let thumbnailUrl: string | null = null;
+          let thumbnailSource: ThumbnailSource = 'none';
+          if (originalImage) { thumbnailUrl = originalImage; thumbnailSource = 'adimages_hash'; }
+          else if (customThumb) { thumbnailUrl = customThumb; thumbnailSource = 'video_custom'; }
+          else if (videoListThumb) { thumbnailUrl = videoListThumb; thumbnailSource = 'video_thumbnails'; }
+          else if (videoPicture) { thumbnailUrl = videoPicture; thumbnailSource = 'video_picture'; }
+          else if (postAttach) { thumbnailUrl = postAttach; thumbnailSource = 'post_attachments'; }
+          else if (c?.image_url) { thumbnailUrl = c.image_url; thumbnailSource = 'creative_image_url'; }
+          else if (previewImage) { thumbnailUrl = previewImage; thumbnailSource = 'preview_iframe'; }
+          else if (postFull) { thumbnailUrl = postFull; thumbnailSource = 'post_full_picture'; }
+          else if (c?.object_story_spec?.video_data?.image_url) {
+            thumbnailUrl = c.object_story_spec.video_data.image_url;
+            thumbnailSource = 'video_data_image_url';
+          }
+          else if (c?.object_story_spec?.link_data?.picture) {
+            thumbnailUrl = c.object_story_spec.link_data.picture;
+            thumbnailSource = 'link_data_picture';
+          }
+          else if (c?.thumbnail_url) {
+            thumbnailUrl = c.thumbnail_url;
+            thumbnailSource = 'creative_thumbnail_url';
+          }
+          thumbnailSourceCounts[thumbnailSource] += 1;
+          if (thumbnailSamples.length < 30) {
+            thumbnailSamples.push({
+              ad_id: ad.id,
+              name: ad.name,
+              source: thumbnailSource,
+              url: thumbnailUrl ?? undefined,
+            });
+          }
           const creativeType: 'video' | 'image' | null = c?.video_id
             ? 'video'
             : thumbnailUrl
@@ -490,6 +567,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const nextOffset = accountOffset + accountsToProcess.length;
   const hasMore = nextOffset < metaAccounts.length;
 
+  console.log(
+    `[sync] account_offset=${accountOffset} synced=${synced} skipped=${skipped} ` +
+      `thumbnail_sources=${JSON.stringify(thumbnailSourceCounts)}`
+  );
+
   return res.status(200).json({
     success: true,
     synced,
@@ -499,6 +581,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     processedAccounts: accountsToProcess.length,
     accountOffset: nextOffset,
     hasMore,
+    thumbnailSources: thumbnailSourceCounts,
+    thumbnailSamples,
     ...(message && { message }),
     ...(errors.length > 0 && { errors }),
   });

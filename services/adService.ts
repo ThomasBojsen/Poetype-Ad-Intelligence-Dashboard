@@ -194,6 +194,8 @@ export interface SyncMetaInsightsResult {
   hasMore?: boolean;
   message?: string;
   errors?: { account?: string; ad_id?: string; error: string }[];
+  thumbnailSources?: Record<string, number>;
+  thumbnailSamples?: Array<{ ad_id: string; name?: string; source: string; url?: string }>;
   error?: string;
 }
 
