@@ -54,6 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     creative?: {
       thumbnail_url?: string;
       image_url?: string;
+      image_hash?: string;
       video_id?: string;
       effective_object_story_id?: string;
       object_story_spec?: {
@@ -67,9 +68,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // card view at 250-300px). object_story_spec.video_data.image_url and
   // creative.image_url are fetched as higher-quality fallbacks.
   const creativeFields =
-    'creative{thumbnail_url.width(600).height(600),image_url,video_id,' +
+    'creative{thumbnail_url.width(600).height(600),image_url,image_hash,video_id,' +
     'effective_object_story_id,' +
-    'object_story_spec{video_data{image_url},link_data{picture}}}';
+    'object_story_spec{video_data{image_url},link_data{picture,image_hash}}}';
   async function fetchAllAdsForAccount(actId: string): Promise<AdItem[]> {
     const all: AdItem[] = [];
     let url: string | null = `https://graph.facebook.com/${META_API_VERSION}/${actId}/ads?fields=id,name,account_id,effective_status,${creativeFields}&limit=100&access_token=${metaToken}`;
@@ -136,38 +137,107 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   /**
    * Pick the highest-resolution video thumbnail. Meta's /video/picture returns
    * one fixed size (often low-res for UGC phone videos), but /video/thumbnails
-   * returns ALL pre-generated sizes including any preferred/uploaded ones.
+   * and /video/custom_thumbnails can return higher-res or brand-uploaded
+   * versions. Prefer custom uploads, then thumbnails marked is_preferred,
+   * then largest available.
    */
+  type ThumbItem = {
+    uri?: string;
+    url?: string;
+    width?: number;
+    height?: number;
+    is_preferred?: boolean;
+  };
   type VideoInfo = {
     picture?: string;
-    thumbnails?: {
-      data?: Array<{
-        uri?: string;
-        width?: number;
-        height?: number;
-        is_preferred?: boolean;
-      }>;
-    };
+    thumbnails?: { data?: ThumbItem[] };
+    custom_thumbnails?: ThumbItem[];
   };
+  function pickBestThumb(items: ThumbItem[]): string | null {
+    if (items.length === 0) return null;
+    const preferred = items.find((t) => t.is_preferred && (t.uri || t.url));
+    if (preferred) return preferred.uri ?? preferred.url ?? null;
+    const sorted = [...items]
+      .filter((t) => t.uri || t.url)
+      .sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
+    return sorted[0]?.uri ?? sorted[0]?.url ?? null;
+  }
   function bestVideoThumbnail(info: VideoInfo | undefined): string | null {
     if (!info) return null;
-    const list = info.thumbnails?.data ?? [];
-    if (list.length > 0) {
-      const preferred = list.find((t) => t.is_preferred && t.uri);
-      if (preferred?.uri) return preferred.uri;
-      const sorted = [...list]
-        .filter((t) => t.uri)
-        .sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
-      if (sorted[0]?.uri) return sorted[0].uri;
-    }
+    const custom = pickBestThumb(info.custom_thumbnails ?? []);
+    if (custom) return custom;
+    const fromList = pickBestThumb(info.thumbnails?.data ?? []);
+    if (fromList) return fromList;
     return info.picture ?? null;
   }
 
   /**
-   * For DPA/catalog ads (no own thumbnail), the underlying post's
-   * full_picture is the rendered preview Meta itself shows.
+   * For DPA/catalog ads (no own thumbnail), or any ad with a real post,
+   * pull the highest-resolution rendered media from the post itself.
+   * attachments.media.image.src is the original-size media; full_picture
+   * is a fallback (Meta sometimes serves a smaller version).
    */
-  type PostInfo = { full_picture?: string; picture?: string };
+  type PostInfo = {
+    full_picture?: string;
+    picture?: string;
+    attachments?: {
+      data?: Array<{
+        media?: { image?: { src?: string; width?: number; height?: number } };
+        subattachments?: {
+          data?: Array<{
+            media?: { image?: { src?: string; width?: number; height?: number } };
+          }>;
+        };
+      }>;
+    };
+  };
+  function bestPostThumbnail(info: PostInfo | undefined): string | null {
+    if (!info) return null;
+    const att = info.attachments?.data ?? [];
+    for (const a of att) {
+      const src = a?.media?.image?.src;
+      if (src) return src;
+      const sub = a?.subattachments?.data ?? [];
+      for (const s of sub) {
+        if (s?.media?.image?.src) return s.media.image.src;
+      }
+    }
+    return info.full_picture ?? info.picture ?? null;
+  }
+
+  /**
+   * Resolve creative.image_hash to the original uploaded asset URL via
+   * /act_X/adimages. This is the actual file the brand uploaded — full
+   * resolution, no Meta-side downscaling.
+   */
+  async function fetchAdImagesByHash(
+    actId: string,
+    hashes: string[]
+  ): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    if (hashes.length === 0 || !metaToken) return map;
+    const unique = Array.from(new Set(hashes));
+    const url =
+      `https://graph.facebook.com/${META_API_VERSION}/${actId}/adimages` +
+      `?hashes=${encodeURIComponent(JSON.stringify(unique))}` +
+      `&fields=hash,url,permalink_url,width,height` +
+      `&access_token=${encodeURIComponent(metaToken)}`;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) return map;
+      const json = (await resp.json()) as {
+        data?: Array<{ hash?: string; url?: string; permalink_url?: string }>;
+      };
+      for (const img of json.data ?? []) {
+        if (img.hash && (img.url || img.permalink_url)) {
+          map.set(img.hash, img.url ?? img.permalink_url ?? '');
+        }
+      }
+    } catch {
+      /* fallbacks still apply */
+    }
+    return map;
+  }
 
   for (const actId of accountsToProcess) {
     try {
@@ -184,9 +254,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .filter((v): v is string => !!v)
         )
       );
-      const [videoInfos, postInfos] = await Promise.all([
-        batchedGet<VideoInfo>(videoIds, 'picture,thumbnails'),
-        batchedGet<PostInfo>(storyIds, 'full_picture,picture'),
+      const imageHashes = ads
+        .flatMap((a) => [
+          a.creative?.image_hash,
+          a.creative?.object_story_spec?.link_data?.image_hash,
+        ])
+        .filter((v): v is string => !!v);
+      const [videoInfos, postInfos, imagesByHash] = await Promise.all([
+        batchedGet<VideoInfo>(videoIds, 'picture,thumbnails,custom_thumbnails'),
+        batchedGet<PostInfo>(
+          storyIds,
+          'full_picture,picture,attachments{media{image{src,width,height}},subattachments{media{image{src,width,height}}}}'
+        ),
+        fetchAdImagesByHash(actId, imageHashes),
       ]);
 
       for (const ad of ads) {
@@ -251,23 +331,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
           const cpc = clicks > 0 ? spend / clicks : 0;
 
-          // Priority: highest-resolution source first.
-          // - video thumbnails (largest of pre-rendered sizes, often 1280x720+)
-          // - post full_picture (rendered preview for DPA/catalog ads)
-          // - creative.image_url: full-size original for static image ads
-          // - video_data.image_url: video cover from creative spec
-          // - link_data.picture: medium-quality preview (200-300px)
-          // - thumbnail_url: low-res default, last resort
+          // Priority: original uploaded asset → rendered post media → fallbacks.
+          // - adimages by hash: the actual file uploaded by the brand, no downscaling
+          // - video custom_thumbnails / thumbnails / picture
+          // - post attachments.media.image.src (full-size rendered media)
+          // - creative.image_url, object_story_spec fallbacks
+          // - thumbnail_url last resort
           const c = ad.creative;
+          const hash = c?.image_hash || c?.object_story_spec?.link_data?.image_hash;
+          const originalImage = hash ? imagesByHash.get(hash) ?? null : null;
           const videoThumb = c?.video_id
             ? bestVideoThumbnail(videoInfos.get(c.video_id))
             : null;
           const postPicture = c?.effective_object_story_id
-            ? postInfos.get(c.effective_object_story_id)?.full_picture ??
-              postInfos.get(c.effective_object_story_id)?.picture ??
-              null
+            ? bestPostThumbnail(postInfos.get(c.effective_object_story_id))
             : null;
           const thumbnailUrl =
+            originalImage ||
             videoThumb ||
             postPicture ||
             c?.image_url ||
