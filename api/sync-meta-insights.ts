@@ -206,6 +206,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   /**
+   * Last-resort high-quality thumbnail extraction: fetch the rendered
+   * ad preview iframe and parse it for fbcdn image URLs. The iframe is
+   * what Meta itself renders in feed, so it embeds full-quality assets.
+   * Two fetches per ad — only call for ads where higher-priority sources
+   * fail (typically video ads with no custom_thumbnails or HD adimages).
+   * See docs/meta-thumbnail-research.md for the full reasoning.
+   */
+  async function fetchPreviewImageUrl(adId: string): Promise<string | null> {
+    if (!metaToken) return null;
+    try {
+      const previewsUrl =
+        `https://graph.facebook.com/${META_API_VERSION}/${adId}/previews` +
+        `?ad_format=INSTAGRAM_STANDARD` +
+        `&access_token=${encodeURIComponent(metaToken)}`;
+      const resp = await fetch(previewsUrl);
+      if (!resp.ok) return null;
+      const json = (await resp.json()) as { data?: Array<{ body?: string }> };
+      const iframeHtml = json.data?.[0]?.body;
+      if (!iframeHtml) return null;
+      const srcMatch = iframeHtml.match(/src="([^"]+)"/);
+      if (!srcMatch) return null;
+      const iframeSrc = srcMatch[1].replace(/&amp;/g, '&');
+      const iframeResp = await fetch(iframeSrc, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
+            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
+      if (!iframeResp.ok) return null;
+      const html = await iframeResp.text();
+      const og = html.match(/property=["']og:image["']\s+content=["']([^"']+)["']/i);
+      if (og) return og[1].replace(/&amp;/g, '&');
+      const poster = html.match(/<video[^>]+poster=["']([^"']+)["']/i);
+      if (poster) return poster[1].replace(/&amp;/g, '&');
+      const imgRegex = /<img[^>]+src=["']([^"']+fbcdn[^"']+)["']/gi;
+      for (const m of Array.from(html.matchAll(imgRegex))) {
+        const u = m[1].replace(/&amp;/g, '&');
+        if (/[\/_]p\d{1,2}x\d{1,2}/.test(u)) continue;
+        if (u.includes('profile') || u.includes('avatar')) continue;
+        return u;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Resolve creative.image_hash to the original uploaded asset URL via
    * /act_X/adimages. This is the actual file the brand uploaded — full
    * resolution, no Meta-side downscaling.
@@ -269,6 +318,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fetchAdImagesByHash(actId, imageHashes),
       ]);
 
+      // Preview-based HD extraction (concurrent per account). Run for any ad
+      // whose creative-level fields don't yield an HD URL — typically video
+      // ads where Meta's thumbnail_url is hard-capped at 64x64.
+      const previewMap = new Map<string, string>();
+      const adsForPreview = ads.filter((a) => {
+        const c = a.creative;
+        if (!c) return false;
+        if (c.image_url) return false;
+        if (c.image_hash && imagesByHash.has(c.image_hash)) return false;
+        const linkHash = c.object_story_spec?.link_data?.image_hash;
+        if (linkHash && imagesByHash.has(linkHash)) return false;
+        if (c.video_id && videoInfos.get(c.video_id)?.custom_thumbnails?.length) return false;
+        return true;
+      });
+      const previewResults = await Promise.all(
+        adsForPreview.map(async (a) => [a.id, await fetchPreviewImageUrl(a.id)] as const)
+      );
+      for (const [id, url] of previewResults) {
+        if (url) previewMap.set(id, url);
+      }
+
       for (const ad of ads) {
         try {
           const insightsUrl = new URL(
@@ -331,12 +401,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
           const cpc = clicks > 0 ? spend / clicks : 0;
 
-          // Priority: original uploaded asset → rendered post media → fallbacks.
-          // - adimages by hash: the actual file uploaded by the brand, no downscaling
-          // - video custom_thumbnails / thumbnails / picture
-          // - post attachments.media.image.src (full-size rendered media)
-          // - creative.image_url, object_story_spec fallbacks
-          // - thumbnail_url last resort
+          // Priority: original uploaded asset → rendered post media → preview iframe → fallbacks.
           const c = ad.creative;
           const hash = c?.image_hash || c?.object_story_spec?.link_data?.image_hash;
           const originalImage = hash ? imagesByHash.get(hash) ?? null : null;
@@ -346,11 +411,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const postPicture = c?.effective_object_story_id
             ? bestPostThumbnail(postInfos.get(c.effective_object_story_id))
             : null;
+          const previewImage = previewMap.get(ad.id) ?? null;
           const thumbnailUrl =
             originalImage ||
             videoThumb ||
             postPicture ||
             c?.image_url ||
+            previewImage ||
             c?.object_story_spec?.video_data?.image_url ||
             c?.object_story_spec?.link_data?.picture ||
             c?.thumbnail_url ||

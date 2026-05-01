@@ -161,9 +161,12 @@ I `api/sync-meta-insights.ts`, prioriteret rækkefølge:
 Alle batches kører parallelt (Promise.all) per account, så fetch-tiden er konstant uanset ad-antal.
 
 **Endnu ikke implementeret (TODO):**
-- URL-transform-trick (se ovenfor) — frontend `upgradeFbCdnUrl` på alle thumbnails
-- Ad Library scrape som sidste fallback for video-ads uden HD-thumbnail
+- Ad Library scrape som allersidste fallback (kun hvis previews også fejler)
 - Custom thumbnail upload-flow til ads der mangler creative
+
+**Note (2026-05-01):** URL-transform-tricket (`stp` swap p64x64 → p1080x1080) blev testet og fejler — Metas CDN signerer over `stp`-parameteren alligevel. SmartThumbnail er stadig i frontend som no-op men beholdt for fremtidig eksperimentering.
+
+**Note (2026-05-01):** Implementeret previews-iframe-extraction. Når higher-priority felter ikke giver HD, kalder syncen `/{ad_id}/previews?ad_format=INSTAGRAM_STANDARD`, henter den returnerede iframe URL, og parser HTML for `og:image` / video-poster / fbcdn `<img>`. Det er det Meta SELV bruger til at rendere ad i feed, så det er garanteret høj kvalitet. Cost: 2 fetches per video-ad uden anden HD-kilde, kørt concurrent per account.
 
 ---
 
