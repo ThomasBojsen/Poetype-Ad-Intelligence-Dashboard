@@ -20,6 +20,31 @@ import {
 
 const CURRENCY = 'kr';
 
+/**
+ * Meta's creative.thumbnail_url URLs are typically capped at 64x64 via
+ * the `stp=...p64x64...` query parameter. The `stp` token is a CDN
+ * transform parameter and is NOT part of the URL signature, so swapping
+ * the size in it produces a higher-resolution image. See
+ * docs/meta-thumbnail-research.md for full background.
+ */
+function upgradeFbCdnUrl(url: string): string {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    if (!u.hostname.endsWith('fbcdn.net')) return url;
+    const stp = u.searchParams.get('stp');
+    if (!stp) return url;
+    const upgraded = stp
+      .replace(/(?<![a-z])p\d+x\d+/g, 'p1080x1080')
+      .replace(/(?<![a-z])s\d+x\d+/g, 's1080x1080');
+    if (upgraded === stp) return url;
+    u.searchParams.set('stp', upgraded);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 function formatDateForInput(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -106,6 +131,47 @@ const RoasPill: React.FC<{ roas: number | null | undefined; size?: 'sm' | 'md' }
   );
 };
 
+/**
+ * Renders a thumbnail with HD-upgrade attempt and graceful fallback.
+ * Tries the upgraded URL first; if it fails (signature mismatch, etc.),
+ * falls back to the original URL. If that also fails, shows placeholder.
+ */
+const SmartThumbnail: React.FC<{
+  src: string;
+  alt: string;
+  className?: string;
+}> = ({ src, alt, className }) => {
+  const upgraded = useMemo(() => upgradeFbCdnUrl(src), [src]);
+  const [stage, setStage] = useState<'upgraded' | 'original' | 'failed'>(
+    upgraded !== src ? 'upgraded' : 'original'
+  );
+
+  useEffect(() => {
+    setStage(upgraded !== src ? 'upgraded' : 'original');
+  }, [upgraded, src]);
+
+  if (stage === 'failed') {
+    return (
+      <div className={`${className ?? ''} flex items-center justify-center bg-[#FFF2EB]`}>
+        <ImageIcon size={36} strokeWidth={1.5} className="text-stone-300" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={stage === 'upgraded' ? upgraded : src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => {
+        if (stage === 'upgraded') setStage('original');
+        else setStage('failed');
+      }}
+    />
+  );
+};
+
 const CreativeBlock: React.FC<{ ad: AdData; aspect?: 'square' | 'video' }> = ({
   ad,
   aspect = 'square',
@@ -115,11 +181,10 @@ const CreativeBlock: React.FC<{ ad: AdData; aspect?: 'square' | 'video' }> = ({
   return (
     <div className={`${aspectClass} relative bg-stone-100 overflow-hidden`}>
       {ad.thumbnail && ad.thumbnail.trim() !== '' ? (
-        <img
+        <SmartThumbnail
           src={ad.thumbnail}
           alt={ad.page_name || ''}
           className="w-full h-full object-cover"
-          loading="lazy"
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-[#FFF2EB]">
@@ -735,11 +800,10 @@ const AdIndex: React.FC = () => {
                               <div className="flex flex-col items-start gap-1">
                                 <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-stone-100">
                                   {row.thumbnail && row.thumbnail.trim() !== '' ? (
-                                    <img
+                                    <SmartThumbnail
                                       src={row.thumbnail}
                                       alt=""
                                       className="w-full h-full object-cover"
-                                      loading="lazy"
                                     />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-[#FFF2EB] border border-[#EADFD8]">
