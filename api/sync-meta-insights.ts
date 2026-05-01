@@ -55,6 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       thumbnail_url?: string;
       image_url?: string;
       video_id?: string;
+      effective_object_story_id?: string;
       object_story_spec?: {
         video_data?: { image_url?: string };
         link_data?: { picture?: string; image_hash?: string };
@@ -67,6 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // creative.image_url are fetched as higher-quality fallbacks.
   const creativeFields =
     'creative{thumbnail_url.width(600).height(600),image_url,video_id,' +
+    'effective_object_story_id,' +
     'object_story_spec{video_data{image_url},link_data{picture}}}';
   async function fetchAllAdsForAccount(actId: string): Promise<AdItem[]> {
     const all: AdItem[] = [];
@@ -88,19 +90,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   /**
-   * Marketing API's creative.thumbnail_url returns a low-res default. The video
-   * object's `picture` field returns a full-resolution auto-generated cover
-   * (typically 1280x720+). One batched call handles up to 50 videos at a time.
+   * Generic batched GET helper. Returns map of input id → parsed body.
+   * Handles Meta's 50-per-batch limit transparently.
    */
-  async function fetchVideoPictures(videoIds: string[]): Promise<Map<string, string>> {
-    const map = new Map<string, string>();
-    if (videoIds.length === 0 || !metaToken) return map;
+  async function batchedGet<T>(
+    ids: string[],
+    fields: string
+  ): Promise<Map<string, T>> {
+    const map = new Map<string, T>();
+    if (ids.length === 0 || !metaToken) return map;
     const BATCH_SIZE = 50;
-    for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
-      const chunk = videoIds.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const chunk = ids.slice(i, i + BATCH_SIZE);
       const batch = chunk.map((id) => ({
         method: 'GET',
-        relative_url: `${id}?fields=picture`,
+        relative_url: `${id}?fields=${fields}`,
       }));
       try {
         const resp = await fetch(`https://graph.facebook.com/${META_API_VERSION}/`, {
@@ -116,10 +120,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const r = results[j];
           if (r?.code === 200 && r.body) {
             try {
-              const body = JSON.parse(r.body) as { picture?: string };
-              if (body.picture) map.set(chunk[j], body.picture);
+              map.set(chunk[j], JSON.parse(r.body) as T);
             } catch {
-              /* skip malformed item */
+              /* skip malformed */
             }
           }
         }
@@ -130,6 +133,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return map;
   }
 
+  /**
+   * Pick the highest-resolution video thumbnail. Meta's /video/picture returns
+   * one fixed size (often low-res for UGC phone videos), but /video/thumbnails
+   * returns ALL pre-generated sizes including any preferred/uploaded ones.
+   */
+  type VideoInfo = {
+    picture?: string;
+    thumbnails?: {
+      data?: Array<{
+        uri?: string;
+        width?: number;
+        height?: number;
+        is_preferred?: boolean;
+      }>;
+    };
+  };
+  function bestVideoThumbnail(info: VideoInfo | undefined): string | null {
+    if (!info) return null;
+    const list = info.thumbnails?.data ?? [];
+    if (list.length > 0) {
+      const preferred = list.find((t) => t.is_preferred && t.uri);
+      if (preferred?.uri) return preferred.uri;
+      const sorted = [...list]
+        .filter((t) => t.uri)
+        .sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
+      if (sorted[0]?.uri) return sorted[0].uri;
+    }
+    return info.picture ?? null;
+  }
+
+  /**
+   * For DPA/catalog ads (no own thumbnail), the underlying post's
+   * full_picture is the rendered preview Meta itself shows.
+   */
+  type PostInfo = { full_picture?: string; picture?: string };
+
   for (const actId of accountsToProcess) {
     try {
       const ads = await fetchAllAdsForAccount(actId);
@@ -138,7 +177,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const videoIds = Array.from(
         new Set(ads.map((a) => a.creative?.video_id).filter((v): v is string => !!v))
       );
-      const videoPictures = await fetchVideoPictures(videoIds);
+      const storyIds = Array.from(
+        new Set(
+          ads
+            .map((a) => a.creative?.effective_object_story_id)
+            .filter((v): v is string => !!v)
+        )
+      );
+      const [videoInfos, postInfos] = await Promise.all([
+        batchedGet<VideoInfo>(videoIds, 'picture,thumbnails'),
+        batchedGet<PostInfo>(storyIds, 'full_picture,picture'),
+      ]);
 
       for (const ad of ads) {
         try {
@@ -203,17 +252,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const cpc = clicks > 0 ? spend / clicks : 0;
 
           // Priority: highest-resolution source first.
-          // - video.picture: full-res auto-generated video cover (~1280x720) — reliably HQ
-          // - video_data.image_url: video cover from creative spec
+          // - video thumbnails (largest of pre-rendered sizes, often 1280x720+)
+          // - post full_picture (rendered preview for DPA/catalog ads)
           // - creative.image_url: full-size original for static image ads
+          // - video_data.image_url: video cover from creative spec
           // - link_data.picture: medium-quality preview (200-300px)
-          // - thumbnail_url: low-res default (~64-300px), last resort
+          // - thumbnail_url: low-res default, last resort
           const c = ad.creative;
-          const videoPicture = c?.video_id ? videoPictures.get(c.video_id) ?? null : null;
+          const videoThumb = c?.video_id
+            ? bestVideoThumbnail(videoInfos.get(c.video_id))
+            : null;
+          const postPicture = c?.effective_object_story_id
+            ? postInfos.get(c.effective_object_story_id)?.full_picture ??
+              postInfos.get(c.effective_object_story_id)?.picture ??
+              null
+            : null;
           const thumbnailUrl =
-            videoPicture ||
-            c?.object_story_spec?.video_data?.image_url ||
+            videoThumb ||
+            postPicture ||
             c?.image_url ||
+            c?.object_story_spec?.video_data?.image_url ||
             c?.object_story_spec?.link_data?.picture ||
             c?.thumbnail_url ||
             null;
